@@ -1,0 +1,110 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Marca: azul del sistema de visualización (rampa secuencial validada) */
+  --color-brand-50: #e8f1fd;
+  --color-brand-100: #cde2fb;
+  --color-brand-200: #9ec5f4;
+  --color-brand-300: #6da7ec;
+  --color-brand-400: #3987e5;
+  --color-brand-500: #2a78d6;
+  --color-brand-600: #256abf;
+  --color-brand-700: #1c5cab;
+  --color-brand-800: #184f95;
+  --color-brand-900: #104281;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--color-slate-100);
+  color: #0f172a;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars discretos */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+/* Render de markdown (documentación de proyectos) */
+.markdown h1 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.5rem;
+}
+.markdown h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.4rem;
+}
+.markdown h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0.6rem 0 0.3rem;
+}
+.markdown p {
+  margin: 0.4rem 0;
+  line-height: 1.6;
+}
+.markdown ul,
+.markdown ol {
+  margin: 0.4rem 0 0.4rem 1.25rem;
+  list-style: disc;
+}
+.markdown ol {
+  list-style: decimal;
+}
+.markdown li {
+  margin: 0.15rem 0;
+}
+.markdown a {
+  color: var(--color-brand-600);
+  text-decoration: underline;
+}
+.markdown code {
+  background: var(--color-slate-100);
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.8em;
+}
+.markdown pre {
+  background: var(--color-slate-900);
+  color: var(--color-slate-100);
+  border-radius: 8px;
+  padding: 0.75rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+.markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+.markdown blockquote {
+  border-left: 3px solid var(--color-slate-300);
+  padding-left: 0.75rem;
+  color: var(--color-slate-500);
+  margin: 0.5rem 0;
+}
+.markdown strong {
+  font-weight: 600;
+}
+
+@media print {
+  body {
+    background: white !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-area {
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
