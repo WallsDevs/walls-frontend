@@ -64,11 +64,6 @@ export default function Login() {
             </Button>
           </div>
         </form>
-
-        <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs leading-relaxed text-slate-400">
-          <p className="mb-1 font-semibold text-slate-300">Cuentas de demostración (clave: Walls123!)</p>
-          <p>Admin: admin@walls.dev · Dev: carlos@walls.dev · Cliente: cliente@fairpay.com</p>
-        </div>
       </div>
     </div>
   )
