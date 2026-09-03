@@ -183,6 +183,19 @@ export const INVOICE_STATUS_TONES: Record<string, BadgeTone> = {
   paid: 'green',
 }
 
+export const QUOTE_STATUS_TONES: Record<string, BadgeTone> = {
+  draft: 'gray',
+  sent: 'amber',
+  approved: 'green',
+  rejected: 'red',
+}
+
+export const MILESTONE_STATUS_TONES: Record<string, BadgeTone> = {
+  pending: 'gray',
+  in_progress: 'blue',
+  delivered: 'green',
+}
+
 export const PRIORITY_TONES: Record<string, BadgeTone> = {
   low: 'gray',
   medium: 'blue',

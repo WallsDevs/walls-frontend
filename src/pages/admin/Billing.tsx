@@ -320,6 +320,57 @@ function UnbilledTab() {
             ) : null}
           </TableWrap>
 
+          {(preview.milestones || []).length ? (
+            <Card className="mt-4 overflow-hidden">
+              <div className="border-b border-slate-200 px-5 py-3">
+                <h3 className="text-sm font-semibold text-slate-900">Entregables aprobados y entregados</h3>
+                <p className="text-xs text-slate-500">De presupuestos aprobados. Se facturan una sola vez.</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-max text-left text-sm">
+                  <thead>
+                    <tr>
+                      <Th>Entregable</Th>
+                      <Th>Presupuesto</Th>
+                      <Th>Entregado</Th>
+                      <Th>Ejecutó</Th>
+                      <Th right>Pago al dev</Th>
+                      <Th right>Cobro al cliente</Th>
+                      <Th right>Margen</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.milestones.map((m: any) => {
+                      const skip = m.carried && !includeCarryOver
+                      return (
+                        <tr key={m.documentId} className={skip ? 'opacity-45' : ''}>
+                          <Td className="font-medium text-slate-900">
+                            {m.title}
+                            {m.carried ? (
+                              <span className="block text-[10px] font-medium text-amber-700">
+                                entregado antes del período
+                              </span>
+                            ) : null}
+                          </Td>
+                          <Td className="text-slate-500">{m.quoteNumber || '—'}</Td>
+                          <Td className="whitespace-nowrap text-slate-500">{fmtDate(m.deliveredAt)}</Td>
+                          <Td className="text-slate-600">{m.developer?.name || '—'}</Td>
+                          <Td right>{skip ? <span className="text-slate-400">—</span> : money(m.devAmount)}</Td>
+                          <Td right className="font-medium">
+                            {skip ? <span className="text-slate-400">—</span> : money(m.amount)}
+                          </Td>
+                          <Td right className="font-medium text-emerald-600">
+                            {skip ? <span className="text-slate-400">—</span> : money(m.amount - m.devAmount)}
+                          </Td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ) : null}
+
           <Card className="mt-4 p-4">
             <div className="flex flex-wrap items-end gap-3">
               <Field label="Notas para la factura (opcional)" className="min-w-60 flex-1">
@@ -329,7 +380,7 @@ function UnbilledTab() {
                 icon={ArrowRight}
                 onClick={() => generateMutation.mutate()}
                 loading={generateMutation.isPending}
-                disabled={!billableRows.length}
+                disabled={!billableRows.length && !(preview.milestones || []).some((m: any) => includeCarryOver || !m.carried)}
               >
                 Generar factura + reporte de pago
               </Button>

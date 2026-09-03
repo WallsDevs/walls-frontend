@@ -56,3 +56,18 @@ export const BILLING_TYPE_LABELS: Record<string, string> = {
   hourly: 'Por hora',
   fixed: 'Tarifa fija mensual',
 }
+
+export const QUOTE_STATUS_LABELS: Record<string, string> = {
+  draft: 'Borrador',
+  sent: 'Enviado',
+  approved: 'Aprobado',
+  rejected: 'Rechazado',
+}
+
+export const MILESTONE_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pendiente',
+  in_progress: 'En progreso',
+  delivered: 'Entregado',
+}
+
+export { QUOTE_STATUS_TONES, MILESTONE_STATUS_TONES } from '../components/ui'
