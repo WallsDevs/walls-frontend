@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Clock3, ListTodo } from 'lucide-react'
+import { Clock3, ListTodo, Plus } from 'lucide-react'
 import { api } from '../../lib/api'
 import { fmtDate, hours, todayISO } from '../../lib/format'
 import { PRIORITY_LABELS, TASK_STATUS_LABELS } from '../../lib/labels'
@@ -20,6 +20,7 @@ import {
   PRIORITY_TONES,
 
 } from '../../components/ui'
+import NewTaskModal from '../../components/dev/NewTaskModal'
 
 function LogHoursModal({ task, onClose }: { task: any | null; onClose: () => void }) {
   const qc = useQueryClient()
@@ -78,6 +79,7 @@ export default function MyTasks() {
   const qc = useQueryClient()
   const [logging, setLogging] = useState<any | null>(null)
   const [showDone, setShowDone] = useState(false)
+  const [creating, setCreating] = useState(false)
 
   const { data: tasks, isLoading, error } = useQuery({
     queryKey: ['me-tasks'],
@@ -110,10 +112,15 @@ export default function MyTasks() {
         title="Mis tareas"
         subtitle="Lo que tienes asignado, por proyecto"
         actions={
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} className="size-4 accent-brand-500" />
-            Ver completadas
-          </label>
+          <>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+              <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} className="size-4 accent-brand-500" />
+              Ver completadas
+            </label>
+            <Button icon={Plus} onClick={() => setCreating(true)}>
+              Nueva tarea
+            </Button>
+          </>
         }
       />
 
@@ -173,6 +180,7 @@ export default function MyTasks() {
       )}
 
       <LogHoursModal task={logging} onClose={() => setLogging(null)} />
+      <NewTaskModal open={creating} onClose={() => setCreating(false)} />
     </div>
   )
 }
