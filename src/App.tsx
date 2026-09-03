@@ -16,6 +16,7 @@ import Quotes from './pages/admin/Quotes'
 import QuoteDetail from './pages/admin/QuoteDetail'
 import PersonalInvoices from './pages/admin/PersonalInvoices'
 import PersonalInvoicePage from './pages/admin/PersonalInvoicePage'
+import PersonalInvoiceEditor from './pages/admin/PersonalInvoiceEditor'
 import MyTasks from './pages/dev/MyTasks'
 import MyHours from './pages/dev/MyHours'
 import ClientProjects from './pages/client/ClientProjects'
@@ -38,6 +39,8 @@ function AdminRoutes() {
       <Route path="quotes" element={<Quotes />} />
       <Route path="quotes/:documentId" element={<QuoteDetail />} />
       <Route path="personal-invoices" element={<PersonalInvoices />} />
+      <Route path="personal-invoices/new" element={<PersonalInvoiceEditor />} />
+      <Route path="personal-invoices/:documentId/edit" element={<PersonalInvoiceEditor />} />
       <Route path="personal-invoices/:documentId" element={<PersonalInvoicePage />} />
       <Route path="my-tasks" element={<MyTasks />} />
       <Route path="my-hours" element={<MyHours />} />
