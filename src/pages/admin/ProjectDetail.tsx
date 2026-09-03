@@ -72,7 +72,7 @@ export default function ProjectDetail() {
     queryFn: () =>
       rest.list('tasks', {
         filters: { project: { documentId: { $eq: documentId } } },
-        populate: { assignee: true },
+        populate: { assignee: true, attachments: true },
         sort: 'createdAt:desc',
         pagination: { pageSize: 200 },
       }),

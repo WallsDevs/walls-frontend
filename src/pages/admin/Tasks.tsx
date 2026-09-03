@@ -34,7 +34,7 @@ export default function Tasks() {
     queryKey: ['tasks', 'all'],
     queryFn: () =>
       rest.list('tasks', {
-        populate: { project: true, assignee: true },
+        populate: { project: true, assignee: true, attachments: true },
         sort: 'createdAt:desc',
         pagination: { pageSize: 300 },
       }),

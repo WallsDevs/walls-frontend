@@ -5,6 +5,7 @@ import { rest } from '../lib/api'
 import { fmtDate, hours, todayISO } from '../lib/format'
 import { PRIORITY_LABELS, TASK_STATUS_LABELS } from '../lib/labels'
 import { Badge, Button, ConfirmDialog, Field, Input, Modal, Select, Textarea, ErrorNote } from './ui'
+import AttachmentsField, { type Attachment } from './AttachmentsField'
 
 const emptyForm = {
   title: '',
@@ -36,6 +37,7 @@ export default function TaskModal({
   const qc = useQueryClient()
   const [form, setForm] = useState<any>(emptyForm)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
   const [entry, setEntry] = useState({ developer: '', date: todayISO(), hours: '', description: '' })
 
   const effectiveProject = projectId || form.project
@@ -86,6 +88,9 @@ export default function TaskModal({
       setForm({ ...emptyForm, project: projectId || '' })
     }
     setEntry({ developer: '', date: todayISO(), hours: '', description: '' })
+    setAttachments(
+      (task?.attachments || []).map((a: any) => ({ id: a.id, url: a.url, name: a.name })),
+    )
   }, [open, task, projectId])
 
   const set = (k: string, v: unknown) => setForm((f: any) => ({ ...f, [k]: v }))
@@ -110,6 +115,7 @@ export default function TaskModal({
         dueDate: form.dueDate || null,
         assignee: form.assignee || null,
         project: effectiveProject,
+        attachments: attachments.map((a) => a.id),
       }
       if (task) return rest.update('tasks', task.documentId, data)
       return rest.create('tasks', data)
@@ -231,6 +237,10 @@ export default function TaskModal({
                   </option>
                 ))}
             </Select>
+          </Field>
+
+          <Field label="Imágenes">
+            <AttachmentsField value={attachments} onChange={setAttachments} />
           </Field>
 
           {saveMutation.error ? <ErrorNote error={saveMutation.error} /> : null}
