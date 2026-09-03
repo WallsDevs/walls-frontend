@@ -18,6 +18,7 @@ import {
   Th,
   type BadgeTone,
 } from '../../components/ui'
+import { useAccounts } from '../../lib/useAccounts'
 import DeveloperForm from '../../components/DeveloperForm'
 
 const LEVEL_TONES: Record<string, BadgeTone> = { junior: 'gray', mid: 'blue', senior: 'violet' }
@@ -28,6 +29,7 @@ export default function Developers() {
   const [search, setSearch] = useState('')
   const [level, setLevel] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const { developerAccount } = useAccounts()
 
   const { data: devs, isLoading } = useQuery({
     queryKey: ['developers'],
@@ -164,13 +166,19 @@ export default function Developers() {
                     </span>
                   </Td>
                   <Td>
-                    {d.user ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
-                        <KeyRound size={12} /> Sí
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400">No</span>
-                    )}
+                    {(() => {
+                      const acc = developerAccount(d.documentId)
+                      if (!acc) return <span className="text-xs text-slate-400">Sin cuenta</span>
+                      return (
+                        <span
+                          title={acc.email}
+                          className="inline-flex items-center gap-1 text-xs text-emerald-600"
+                        >
+                          <KeyRound size={12} />
+                          {acc.role === 'Administrator' ? 'Admin' : 'Developer'}
+                        </span>
+                      )
+                    })()}
                   </Td>
                 </tr>
               )

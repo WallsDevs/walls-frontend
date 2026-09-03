@@ -18,6 +18,7 @@ import {
   Textarea,
   Th,
 } from '../../components/ui'
+import { useAccounts } from '../../lib/useAccounts'
 import AccountModal from '../../components/AccountModal'
 
 const emptyForm = { name: '', contactName: '', email: '', phone: '', taxId: '', notes: '', active: true }
@@ -108,6 +109,7 @@ export default function Clients() {
   const [formModal, setFormModal] = useState<{ open: boolean; client?: any }>({ open: false })
   const [accessFor, setAccessFor] = useState<any | null>(null)
   const [deleting, setDeleting] = useState<any | null>(null)
+  const { clientAccount } = useAccounts()
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ['clients'],
@@ -180,15 +182,18 @@ export default function Clients() {
                 <Td right>{(c.projects || []).length}</Td>
                 <Td right>{(c.invoices || []).length}</Td>
                 <Td>
-                  {c.user ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
-                      <KeyRound size={12} /> Con acceso
-                    </span>
-                  ) : (
-                    <Button size="sm" variant="secondary" icon={KeyRound} onClick={() => setAccessFor(c)}>
-                      Crear acceso
-                    </Button>
-                  )}
+                  {(() => {
+                    const acc = clientAccount(c.documentId)
+                    return acc ? (
+                      <span title={acc.email} className="inline-flex items-center gap-1 text-xs text-emerald-600">
+                        <KeyRound size={12} /> Con acceso
+                      </span>
+                    ) : (
+                      <Button size="sm" variant="secondary" icon={KeyRound} onClick={() => setAccessFor(c)}>
+                        Crear acceso
+                      </Button>
+                    )
+                  })()}
                 </Td>
                 <Td>
                   <div className="flex justify-end gap-1">

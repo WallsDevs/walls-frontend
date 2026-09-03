@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { Button, Field, Input, Modal, ErrorNote, cx } from './ui'
+import { useAccounts } from '../lib/useAccounts'
 
 /**
  * Crea o vincula la cuenta de acceso para un developer o cliente.
@@ -24,6 +25,8 @@ export default function AccountModal({
   name: string
 }) {
   const qc = useQueryClient()
+  const { developerAccount, clientAccount } = useAccounts()
+  const existing = type === 'developer' ? developerAccount(profileId) : clientAccount(profileId)
   const [mode, setMode] = useState<'create' | 'link'>('create')
   const [accessRole, setAccessRole] = useState<'developer' | 'admin'>('developer')
   const [email, setEmail] = useState('')
@@ -69,20 +72,37 @@ export default function AccountModal({
       onClose={onClose}
       title={`Crear acceso para ${name}`}
       footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={() => mutation.mutate()}
-            loading={mutation.isPending}
-            disabled={!email || (!linking && password.length < 6)}
-          >
-            {linking ? 'Vincular cuenta' : 'Crear cuenta'}
-          </Button>
-        </>
+        existing ? (
+          <Button onClick={onClose}>Entendido</Button>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => mutation.mutate()}
+              loading={mutation.isPending}
+              disabled={!email || (!linking && password.length < 6)}
+            >
+              {linking ? 'Vincular cuenta' : 'Crear cuenta'}
+            </Button>
+          </>
+        )
       }
     >
+      {existing ? (
+        <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <p className="font-semibold">{name} ya tiene cuenta de acceso</p>
+          <p className="mt-1">
+            Entra con <span className="font-medium">{existing.email}</span> como{' '}
+            {existing.role === 'Administrator' ? 'administrador' : existing.role === 'Client' ? 'cliente' : 'developer'}.
+          </p>
+          <p className="mt-2 text-xs text-emerald-700">
+            Para cambiarle la contraseña o el rol, hazlo desde el panel de Strapi.
+          </p>
+        </div>
+      ) : (
+      <>
       {type === 'developer' ? (
         <div className="mb-4 grid grid-cols-2 gap-2">
           <button type="button" onClick={() => setMode('create')} className={optionCls(mode === 'create')}>
@@ -132,6 +152,8 @@ export default function AccountModal({
         )}
         {mutation.error ? <ErrorNote error={mutation.error} /> : null}
       </div>
+      </>
+      )}
     </Modal>
   )
 }

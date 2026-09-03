@@ -19,6 +19,7 @@ import {
   PageLoader,
   ErrorNote,
 } from '../../components/ui'
+import { useAccounts } from '../../lib/useAccounts'
 import DeveloperForm from '../../components/DeveloperForm'
 import AccountModal from '../../components/AccountModal'
 
@@ -29,6 +30,7 @@ export default function DeveloperDetail() {
   const [editing, setEditing] = useState(false)
   const [creatingAccess, setCreatingAccess] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const { developerAccount } = useAccounts()
 
   const { data: dev, isLoading, error } = useQuery({
     queryKey: ['developer', documentId],
@@ -65,6 +67,7 @@ export default function DeveloperDetail() {
   if (error || !dev) return <ErrorNote error={error || new Error('Developer no encontrado')} />
 
   const name = `${dev.firstName} ${dev.lastName}`
+  const account = developerAccount(dev.documentId)
 
   return (
     <div>
@@ -89,7 +92,7 @@ export default function DeveloperDetail() {
           </div>
         </div>
         <div className="flex gap-2">
-          {!dev.user && (
+          {!account && (
             <Button variant="secondary" icon={KeyRound} onClick={() => setCreatingAccess(true)}>
               Crear acceso
             </Button>
@@ -156,10 +159,17 @@ export default function DeveloperDetail() {
             {!(dev.paymentMethods || []).length && <span className="text-sm text-slate-400">Sin métodos registrados</span>}
           </div>
 
-          {dev.user ? (
-            <p className="mt-5 flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-              <KeyRound size={13} /> Tiene acceso al portal ({dev.user.email})
-            </p>
+          {account ? (
+            <div className="mt-5 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              <p className="flex items-center gap-1.5 font-semibold">
+                <KeyRound size={13} /> Ya tiene cuenta de acceso
+              </p>
+              <p className="mt-0.5">{account.email}</p>
+              <p className="text-emerald-700">
+                Entra como {account.role === 'Administrator' ? 'administrador (panel completo)' : 'developer (su portal)'}
+                {account.blocked ? ' · cuenta bloqueada' : ''}
+              </p>
+            </div>
           ) : (
             <p className="mt-5 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
               Aún no tiene cuenta de acceso al portal.
