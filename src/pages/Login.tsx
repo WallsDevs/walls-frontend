@@ -13,6 +13,7 @@ export default function Login() {
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [passwordFocused, setPasswordFocused] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -35,7 +36,7 @@ export default function Login() {
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center">
           <Suspense fallback={<div className="mb-2 size-36" />}>
-            <CompanionRobot className="mb-2 size-36" />
+            <CompanionRobot className="mb-2 size-36" coverEyes={passwordFocused && !showPassword} />
           </Suspense>
           <img src={wordmark} alt="Walls" className="h-7 w-auto" />
           <p className="mt-1.5 text-sm text-[#a8a5a6]">Panel administrativo</p>
@@ -59,6 +60,8 @@ export default function Login() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
                   placeholder="••••••••"
                   required
                   className="pr-10 focus:border-[#0147ff] focus:ring-[#0147ff]/15"

@@ -6,17 +6,20 @@ type RobotHandle = {
   setTarget: (x: number, y: number, size: number) => void
   setSection: (i: number) => void
   setGaze: (x: number | null, y: number | null) => void
+  setCoverEyes: (active: boolean) => void
   setShell: (name: 'light' | 'dark') => void
   dispose: () => void
 }
 
 /**
  * The WallsTeam mascot from the marketing site, ported to stand watch over the login form.
- * It wakes up once mounted, then follows the cursor — the one flourish on an otherwise quiet screen.
+ * It wakes up once mounted, follows the cursor, and covers its eyes while `coverEyes` is set —
+ * used to look away while a password is being typed.
  */
-export default function CompanionRobot({ className }: { className?: string }) {
+export default function CompanionRobot({ className, coverEyes }: { className?: string; coverEyes?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const robotRef = useRef<RobotHandle | null>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -24,6 +27,7 @@ export default function CompanionRobot({ className }: { className?: string }) {
     if (!canvas || !wrap) return
 
     const robot = createRobot(canvas, { shell: 'light', markUrl }) as RobotHandle
+    robotRef.current = robot
 
     const wake = () => {
       const w = wrap.clientWidth
@@ -49,9 +53,14 @@ export default function CompanionRobot({ className }: { className?: string }) {
       cancelAnimationFrame(raf)
       window.removeEventListener('pointermove', onMove)
       wrap.removeEventListener('pointerleave', onLeave)
+      robotRef.current = null
       robot.dispose()
     }
   }, [])
+
+  useEffect(() => {
+    robotRef.current?.setCoverEyes(!!coverEyes)
+  }, [coverEyes])
 
   return (
     <div ref={wrapRef} className={className}>

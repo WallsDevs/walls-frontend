@@ -140,7 +140,8 @@ export function createRobot(canvas, opts = {}) {
   resize(); window.addEventListener('resize', resize);
 
   const S = { tx: W / 2, ty: H / 2, tsize: 320, x: W / 2, y: H / 2, size: 320, sec: 0, secCur: 0, gaze: null, gx: 0, gy: 0,
-    build: 0, buildCur: 0, flowNode: 0, pointCur: 0, deliver: 0, deliverCur: 0, bars: 0, barsCur: 0, appear: 0, started: false };
+    build: 0, buildCur: 0, flowNode: 0, pointCur: 0, deliver: 0, deliverCur: 0, bars: 0, barsCur: 0, appear: 0, started: false,
+    cover: 0, coverCur: 0 };
   let raf = 0, last = performance.now(), time = 0, ticks = 0, timer = 0;
 
   function frame(now) {
@@ -154,6 +155,7 @@ export function createRobot(canvas, opts = {}) {
     S.pointCur += (S.flowNode / 4 - S.pointCur) * kSec;
     S.deliverCur += (S.deliver - S.deliverCur) * kFast;
     S.barsCur += (S.bars - S.barsCur) * kFast;
+    S.coverCur += (S.cover - S.coverCur) * kFast;
     if (S.started) S.appear += (1 - S.appear) * kFast;
     const gxT = S.gaze ? S.gaze.x : Math.sin(time * 0.6) * 0.5, gyT = S.gaze ? S.gaze.y : Math.sin(time * 0.43) * 0.25;
     S.gx += (gxT - S.gx) * kFast; S.gy += (gyT - S.gy) * kFast;
@@ -167,6 +169,11 @@ export function createRobot(canvas, opts = {}) {
     bars *= S.barsCur;
     const wBuild = Math.max(0, 1 - Math.abs(S.secCur - 1));
     Rex += wBuild * S.buildCur * 0.35 * Math.sin(time * 5); Lf -= wBuild * 0.3 * S.buildCur; Lex += wBuild * S.buildCur * 0.25 * Math.sin(time * 4 + 1);
+    // Shy pose: both hands rise to cover the visor while a password is being typed.
+    const wCover = S.coverCur;
+    Lf = Lf * (1 - wCover) + -0.95 * wCover; Lo = Lo * (1 - wCover) + 0.15 * wCover; Lex = Lex * (1 - wCover) + -0.9 * wCover;
+    Rf = Rf * (1 - wCover) + -0.95 * wCover; Ro = Ro * (1 - wCover) + 0.15 * wCover; Rex = Rex * (1 - wCover) + -0.9 * wCover;
+    hp += wCover * 0.12;
     const wFlow = Math.max(0, 1 - Math.abs(S.secCur - 2));
     Ro += wFlow * (S.pointCur - 0.5) * 0.7; hy += wFlow * (S.pointCur - 0.5) * 0.5;
     const d = 0;
@@ -174,11 +181,11 @@ export function createRobot(canvas, opts = {}) {
 
     body.rotation.y = yaw;
     body.position.y = reduced ? 0 : Math.sin(time * 1.5) * bob;
-    head.rotation.set(hp - S.gy * 0.25, hy + S.gx * 0.4, hr);
+    head.rotation.set(hp - S.gy * 0.25 * (1 - wCover), hy + S.gx * 0.4 * (1 - wCover), hr);
     eyeL.position.x = -0.3 + S.gx * 0.07; eyeR.position.x = 0.3 + S.gx * 0.07;
     eyeL.position.y = eyeR.position.y = 0.06 + S.gy * 0.05;
     const blink = (time % 3.9) < 0.11 ? 0.12 : 1;
-    eyeL.scale.y = eyeR.scale.y = Math.max(0.0001, (1 - bars) * blink);
+    eyeL.scale.y = eyeR.scale.y = Math.max(0.0001, (1 - bars) * blink * (1 - wCover * 0.95));
     for (let i = 0; i < 5; i++) barsArr[i].scale.y = Math.max(0.0001, bars * (0.25 + 0.75 * Math.abs(Math.sin(time * 7 + i * 1.3))));
     const sway = reduced ? 0 : 0.03;
     L.shoulder.rotation.set(Lf + Math.sin(time * 1.3) * sway, 0, -Lo); L.elbow.rotation.set(Lex, 0, -Lez);
@@ -210,6 +217,7 @@ export function createRobot(canvas, opts = {}) {
     setTarget(x, y, size) { S.tx = x; S.ty = y; S.tsize = size; if (!S.started) { S.started = true; S.x = x; S.y = y; S.size = size; } },
     setSection(i) { S.sec = Math.max(0, Math.min(LAST, i)); },
     setGaze(x, y) { S.gaze = (x == null) ? null : { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) }; },
+    setCoverEyes(active) { S.cover = active ? 1 : 0; },
     setExtras(o) { if (o.build != null) S.build = o.build; if (o.flowNode != null) S.flowNode = o.flowNode; if (o.deliver != null) S.deliver = o.deliver; if (o.bars != null) S.bars = o.bars; },
     setShell,
     debug() { return { S: { ...S }, scale: root.scale.x, pos: root.position.toArray(), W, H, time, drawCalls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
