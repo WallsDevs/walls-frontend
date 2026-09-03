@@ -12,6 +12,8 @@ import Billing from './pages/admin/Billing'
 import InvoicePage from './pages/admin/InvoicePage'
 import Clients from './pages/admin/Clients'
 import Staff from './pages/admin/Staff'
+import PersonalInvoices from './pages/admin/PersonalInvoices'
+import PersonalInvoicePage from './pages/admin/PersonalInvoicePage'
 import MyTasks from './pages/dev/MyTasks'
 import MyHours from './pages/dev/MyHours'
 import ClientProjects from './pages/client/ClientProjects'
@@ -31,6 +33,8 @@ function AdminRoutes() {
       <Route path="billing/invoices/:documentId" element={<InvoicePage />} />
       <Route path="clients" element={<Clients />} />
       <Route path="staff" element={<Staff />} />
+      <Route path="personal-invoices" element={<PersonalInvoices />} />
+      <Route path="personal-invoices/:documentId" element={<PersonalInvoicePage />} />
       <Route path="my-tasks" element={<MyTasks />} />
       <Route path="my-hours" element={<MyHours />} />
       <Route path="*" element={<Navigate to="/" replace />} />

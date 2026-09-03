@@ -8,6 +8,7 @@ import {
   Receipt,
   Building2,
   Briefcase,
+  Wallet,
   Clock3,
   LogOut,
   Menu,
@@ -28,6 +29,7 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     { to: '/billing', label: 'Facturación', icon: Receipt },
     { to: '/clients', label: 'Clientes', icon: Building2 },
     { to: '/staff', label: 'Equipo interno', icon: Briefcase },
+    { to: '/personal-invoices', label: 'Facturas propias', icon: Wallet },
   ],
   developer: [
     { to: '/', label: 'Mis tareas', icon: ListTodo, end: true },
