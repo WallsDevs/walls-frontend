@@ -30,6 +30,7 @@ function UnbilledTab() {
   const [periodStart, setPeriodStart] = useState(monthStartISO())
   const [periodEnd, setPeriodEnd] = useState(monthEndISO())
   const [notes, setNotes] = useState('')
+  const [includeCarryOver, setIncludeCarryOver] = useState(false)
   const [result, setResult] = useState<any | null>(null)
 
   const { data: projects } = useQuery({
@@ -47,7 +48,7 @@ function UnbilledTab() {
     mutationFn: () =>
       api('/billing/generate', {
         method: 'POST',
-        body: { project, periodStart, periodEnd, notes: notes || undefined },
+        body: { project, periodStart, periodEnd, notes: notes || undefined, includeCarryOver },
       }),
     onSuccess: (res) => {
       setResult(res)
@@ -60,9 +61,21 @@ function UnbilledTab() {
     },
   })
 
+  const carried = preview?.carried
+  const hasCarried = (carried?.hours || 0) > 0
+
   const billableRows = (preview?.rows || []).filter((r: any) =>
-    r.billingType === 'fixed' ? !r.alreadyBilled : r.hours > 0,
+    r.billingType === 'fixed'
+      ? !r.alreadyBilled
+      : (includeCarryOver ? r.hoursInPeriod + r.hoursCarried : r.hoursInPeriod) > 0,
   )
+
+  // Lo que realmente se va a facturar según el check de horas arrastradas
+  const shownTotals = {
+    clientTotal: (preview?.totals?.clientTotal || 0) + (includeCarryOver ? carried?.clientTotal || 0 : 0),
+    devTotal: (preview?.totals?.devTotal || 0) + (includeCarryOver ? carried?.devTotal || 0 : 0),
+    agencyProfit: (preview?.totals?.agencyProfit || 0) + (includeCarryOver ? carried?.agencyProfit || 0 : 0),
+  }
 
   return (
     <div>
@@ -149,6 +162,32 @@ function UnbilledTab() {
             </Card>
           ) : null}
 
+          {hasCarried ? (
+            <Card className="mb-4 border-amber-200 bg-amber-50 p-4">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-amber-900">
+                <AlertTriangle size={18} className="shrink-0" />
+                <div className="min-w-60 flex-1">
+                  <p className="font-semibold">
+                    Hay {hours(carried.hours)} sin facturar de antes del {fmtDate(periodStart)} ({carried.entryCount} registros,{' '}
+                    {money(carried.clientTotal)} al cliente)
+                  </p>
+                  <p className="text-amber-800">
+                    Quedaron pendientes de períodos anteriores. Puedes incluirlas en esta factura o dejarlas para después.
+                  </p>
+                </div>
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={includeCarryOver}
+                    onChange={(e) => setIncludeCarryOver(e.target.checked)}
+                    className="size-4 accent-amber-600"
+                  />
+                  Incluirlas en esta factura
+                </label>
+              </div>
+            </Card>
+          ) : null}
+
           {preview.unassigned?.length ? (
             <Card className="mb-4 border-amber-200 bg-amber-50 p-4">
               <div className="flex gap-2.5 text-sm text-amber-800">
@@ -183,7 +222,13 @@ function UnbilledTab() {
                 return (
                   <tr
                     key={r.assignmentId}
-                    className={(r.billingType === 'hourly' && r.hours === 0) || skipped ? 'opacity-45' : ''}
+                    className={
+                      (r.billingType === 'hourly' &&
+                        (includeCarryOver ? r.hours : r.hoursInPeriod) === 0) ||
+                      skipped
+                        ? 'opacity-45'
+                        : ''
+                    }
                   >
                     <Td className="font-medium text-slate-900">{r.developer.name}</Td>
                     <Td>{r.role}</Td>
@@ -198,15 +243,25 @@ function UnbilledTab() {
                       ) : null}
                     </Td>
                     <Td right>
-                      {hours(r.hours)}
-                      {r.billingType === 'fixed' ? <span className="block text-[10px] text-slate-400">referencia</span> : null}
+                      {hours(includeCarryOver ? r.hours : r.hoursInPeriod)}
+                      {r.billingType === 'fixed' ? (
+                        <span className="block text-[10px] text-slate-400">referencia</span>
+                      ) : r.hoursCarried > 0 ? (
+                        <span className="block text-[10px] font-medium text-amber-700">
+                          {includeCarryOver
+                            ? `incluye ${hours(r.hoursCarried)} arrastradas`
+                            : `+ ${hours(r.hoursCarried)} arrastradas`}
+                        </span>
+                      ) : null}
                     </Td>
                     <Td right>
                       {skipped ? (
                         <span className="text-slate-400">—</span>
                       ) : (
                         <>
-                          <span className="font-medium">{money(r.devAmount)}</span>
+                          <span className="font-medium">
+                            {money(includeCarryOver ? r.devAmount + (r.devAmountCarried || 0) : r.devAmount)}
+                          </span>
                           {r.billingType === 'hourly' ? (
                             <span className="block text-[10px] text-slate-400">{money(r.devRate)}/h</span>
                           ) : (
@@ -220,7 +275,9 @@ function UnbilledTab() {
                         <span className="text-slate-400">—</span>
                       ) : (
                         <>
-                          <span className="font-medium">{money(r.clientAmount)}</span>
+                          <span className="font-medium">
+                            {money(includeCarryOver ? r.clientAmount + (r.clientAmountCarried || 0) : r.clientAmount)}
+                          </span>
                           {r.billingType === 'hourly' ? (
                             <span className="block text-[10px] text-slate-400">{money(r.clientRate)}/h</span>
                           ) : null}
@@ -228,7 +285,15 @@ function UnbilledTab() {
                       )}
                     </Td>
                     <Td right className="font-medium text-emerald-600">
-                      {skipped ? <span className="text-slate-400">—</span> : money(r.clientAmount - r.devAmount)}
+                      {skipped ? (
+                        <span className="text-slate-400">—</span>
+                      ) : (
+                        money(
+                          includeCarryOver
+                            ? r.clientAmount + (r.clientAmountCarried || 0) - (r.devAmount + (r.devAmountCarried || 0))
+                            : r.clientAmount - r.devAmount,
+                        )
+                      )}
                     </Td>
                   </tr>
                 )
@@ -244,10 +309,12 @@ function UnbilledTab() {
             {billableRows.length ? (
               <tfoot>
                 <tr className="bg-slate-50 font-semibold">
-                  <Td colSpan={4 as any}>Totales del período</Td>
-                  <Td right>{money(preview.totals.devTotal)}</Td>
-                  <Td right>{money(preview.totals.clientTotal)}</Td>
-                  <Td right className="text-emerald-600">{money(preview.totals.agencyProfit)}</Td>
+                  <Td colSpan={4 as any}>
+                    {includeCarryOver && hasCarried ? 'Totales a facturar (período + arrastradas)' : 'Totales del período'}
+                  </Td>
+                  <Td right>{money(shownTotals.devTotal)}</Td>
+                  <Td right>{money(shownTotals.clientTotal)}</Td>
+                  <Td right className="text-emerald-600">{money(shownTotals.agencyProfit)}</Td>
                 </tr>
               </tfoot>
             ) : null}
@@ -268,7 +335,7 @@ function UnbilledTab() {
               </Button>
             </div>
             <p className="mt-2 text-xs text-slate-400">
-              Crea la factura al cliente ({money(preview.totals.clientTotal)}) y el reporte de pago a devs ({money(preview.totals.devTotal)}), y marca las horas como facturadas. Ganancia de la agencia: {money(preview.totals.agencyProfit)}.
+              Crea la factura al cliente ({money(shownTotals.clientTotal)}) y el reporte de pago a devs ({money(shownTotals.devTotal)}), y marca las horas como facturadas. Ganancia de la agencia: {money(shownTotals.agencyProfit)}.
             </p>
             {generateMutation.error ? <div className="mt-2"><ErrorNote error={generateMutation.error} /></div> : null}
           </Card>

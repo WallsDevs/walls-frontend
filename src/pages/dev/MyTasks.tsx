@@ -152,7 +152,11 @@ export default function MyTasks() {
                           {hours(t.myHours)}
                           {t.estimateHours ? ` de ${hours(t.estimateHours)} estimadas` : ''}
                         </span>
-                        {t.dueDate ? <span className="text-xs text-slate-400">Vence {fmtDate(t.dueDate)}</span> : null}
+                        {t.status === 'done' && t.completedAt ? (
+                          <span className="text-xs text-emerald-600">Completada {fmtDate(t.completedAt)}</span>
+                        ) : t.dueDate ? (
+                          <span className="text-xs text-slate-400">Vence {fmtDate(t.dueDate)}</span>
+                        ) : null}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">

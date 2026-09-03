@@ -175,7 +175,13 @@ export default function Tasks() {
                   <Td>
                     <Badge tone={PRIORITY_TONES[t.priority] || 'gray'}>{PRIORITY_LABELS[t.priority]}</Badge>
                   </Td>
-                  <Td className="whitespace-nowrap text-slate-500">{fmtDate(t.dueDate)}</Td>
+                  <Td className="whitespace-nowrap text-slate-500">
+                    {t.status === 'done' && t.completedAt ? (
+                      <span className="text-emerald-600">Completada {fmtDate(t.completedAt)}</span>
+                    ) : (
+                      fmtDate(t.dueDate)
+                    )}
+                  </Td>
                   <Td>
                     <Select
                       value={t.status}
@@ -234,7 +240,11 @@ export default function Tasks() {
                           </span>
                         ) : null}
                       </div>
-                      {t.dueDate ? <p className="mt-1.5 text-xs text-slate-400">Vence {fmtDate(t.dueDate)}</p> : null}
+                      {t.status === 'done' && t.completedAt ? (
+                        <p className="mt-1.5 text-xs text-emerald-600">Completada {fmtDate(t.completedAt)}</p>
+                      ) : t.dueDate ? (
+                        <p className="mt-1.5 text-xs text-slate-400">Vence {fmtDate(t.dueDate)}</p>
+                      ) : null}
                     </button>
                   ))}
                   {!list.length && <p className="px-1 py-3 text-center text-xs text-slate-400">Vacío</p>}

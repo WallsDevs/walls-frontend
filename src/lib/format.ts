@@ -10,7 +10,8 @@ export const hours = (n: number | null | undefined) => {
 
 export const fmtDate = (d: string | null | undefined) => {
   if (!d) return '—'
-  const date = new Date(`${d}T12:00:00`)
+  // Acepta tanto fechas sueltas ("2026-09-03") como timestamps ISO completos.
+  const date = new Date(`${String(d).slice(0, 10)}T12:00:00`)
   return new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }).format(date)
 }
 
