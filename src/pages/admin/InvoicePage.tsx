@@ -54,7 +54,7 @@ export default function InvoicePage() {
         </div>
       </div>
 
-      <Card className="print-area mx-auto max-w-3xl p-8 sm:p-10">
+      <Card className="print-area invoice-doc mx-auto max-w-3xl p-8 sm:p-10">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="mb-2 flex items-center gap-2">
@@ -69,7 +69,7 @@ export default function InvoicePage() {
           </div>
           <div className="text-right">
             <p className="text-2xl font-semibold tracking-tight text-slate-900">{inv.number}</p>
-            <div className="mt-1">
+            <div className="no-print mt-1">
               <Badge tone={INVOICE_STATUS_TONES[inv.status]}>{INVOICE_STATUS_LABELS[inv.status]}</Badge>
             </div>
           </div>

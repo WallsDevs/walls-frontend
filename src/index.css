@@ -96,6 +96,14 @@ body {
   font-weight: 600;
 }
 
+/* Sin margen de página el navegador no tiene dónde poner su encabezado
+   (fecha/título) ni su pie (URL), así que el PDF sale limpio. El margen
+   real del documento lo pone .invoice-doc. */
+@page {
+  size: auto;
+  margin: 0;
+}
+
 @media print {
   body {
     background: white !important;
@@ -106,5 +114,11 @@ body {
   .print-area {
     box-shadow: none !important;
     border: none !important;
+    border-radius: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+  .invoice-doc {
+    padding: 14mm !important;
   }
 }

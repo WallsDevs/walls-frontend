@@ -29,13 +29,13 @@ export default function PersonalInvoiceDoc({ inv }: { inv: InvoiceDocData }) {
   const currency = inv.currency || 'USD'
 
   return (
-    <div className="p-8 sm:p-10">
+    <div className="invoice-doc p-8 sm:p-10">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <img src={wordmark} alt="Walls" className="h-6 w-auto" />
         <div className="text-right">
           <p className="text-2xl font-semibold tracking-tight text-slate-900">{inv.number || 'Borrador'}</p>
           {inv.status ? (
-            <div className="mt-1">
+            <div className="no-print mt-1">
               <Badge tone={INVOICE_STATUS_TONES[inv.status]}>{INVOICE_STATUS_LABELS[inv.status]}</Badge>
             </div>
           ) : null}
