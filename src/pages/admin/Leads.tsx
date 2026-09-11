@@ -222,6 +222,10 @@ export default function Leads() {
   const [view, setView] = useState<ViewMode>('board')
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('')
+  const [urgencyFilter, setUrgencyFilter] = useState('')
+  const [countryFilter, setCountryFilter] = useState('')
+  const [overdueOnly, setOverdueOnly] = useState(false)
   const [modal, setModal] = useState<{ open: boolean; lead?: any; defaultStage?: string }>({ open: false })
   const [deleting, setDeleting] = useState<any | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -263,16 +267,34 @@ export default function Leads() {
   const today = todayISO()
   const isOverdue = (l: any) => (!l.stage || l.stage.outcome === 'open') && l.nextFollowUpDate && l.nextFollowUpDate < today
 
+  const countries = useMemo(
+    () => Array.from(new Set((leads || []).map((l: any) => l.country).filter(Boolean))).sort(),
+    [leads],
+  )
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return (leads || []).filter((l: any) => {
       if (q && !l.companyName.toLowerCase().includes(q) && !(l.contactName || '').toLowerCase().includes(q)) return false
       if (stageFilter && l.stage?.documentId !== stageFilter) return false
+      if (sourceFilter && l.source?.documentId !== sourceFilter) return false
+      if (urgencyFilter && l.urgency !== urgencyFilter) return false
+      if (countryFilter && l.country !== countryFilter) return false
+      if (overdueOnly && !isOverdue(l)) return false
       return true
     })
-  }, [leads, search, stageFilter])
+  }, [leads, search, stageFilter, sourceFilter, urgencyFilter, countryFilter, overdueOnly])
 
   const overdueCount = (leads || []).filter(isOverdue).length
+  const hasActiveFilters = !!(search || stageFilter || sourceFilter || urgencyFilter || countryFilter || overdueOnly)
+  const clearFilters = () => {
+    setSearch('')
+    setStageFilter('')
+    setSourceFilter('')
+    setUrgencyFilter('')
+    setCountryFilter('')
+    setOverdueOnly(false)
+  }
   const hasOrphans = filtered.some((l: any) => !l.stage)
   const boardColumns = hasOrphans
     ? [...(stages || []), { documentId: '__none__', name: 'Sin etapa', color: '#cbd5e1', __orphan: true }]
@@ -287,7 +309,11 @@ export default function Leads() {
         subtitle={`${filtered.length} leads`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {overdueCount > 0 ? <Badge tone="red">{overdueCount} vencidos</Badge> : null}
+            {overdueCount > 0 ? (
+              <button onClick={() => setOverdueOnly((v) => !v)}>
+                <Badge tone="red">{overdueCount} vencidos</Badge>
+              </button>
+            ) : null}
             <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
               <button
                 onClick={() => setView('list')}
@@ -318,11 +344,11 @@ export default function Leads() {
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="w-full sm:w-64">
+        <div className="w-full sm:w-56">
           <SearchInput value={search} onChange={setSearch} placeholder="Buscar lead…" />
         </div>
         {view === 'list' ? (
-          <Select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className="w-full sm:w-52">
+          <Select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className="w-full sm:w-44">
             <option value="">Todas las etapas</option>
             {(stages || []).map((s: any) => (
               <option key={s.documentId} value={s.documentId}>
@@ -330,6 +356,46 @@ export default function Leads() {
               </option>
             ))}
           </Select>
+        ) : null}
+        <Select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-full sm:w-40">
+          <option value="">Todos los orígenes</option>
+          {(sources || []).map((s: any) => (
+            <option key={s.documentId} value={s.documentId}>
+              {s.name}
+            </option>
+          ))}
+        </Select>
+        <Select value={urgencyFilter} onChange={(e) => setUrgencyFilter(e.target.value)} className="w-full sm:w-36">
+          <option value="">Toda urgencia</option>
+          {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </Select>
+        {countries.length > 1 ? (
+          <Select value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} className="w-full sm:w-36">
+            <option value="">Todo país</option>
+            {countries.map((c: any) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </Select>
+        ) : null}
+        <label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={overdueOnly}
+            onChange={(e) => setOverdueOnly(e.target.checked)}
+            className="size-4 accent-brand-500"
+          />
+          Solo vencidos
+        </label>
+        {hasActiveFilters ? (
+          <button onClick={clearFilters} className="text-sm font-medium text-slate-400 hover:text-slate-600">
+            Limpiar filtros
+          </button>
         ) : null}
         <div className="ml-0 flex items-center gap-3 sm:ml-auto">
           <Link to="/lead-sources" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700">
