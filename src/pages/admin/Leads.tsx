@@ -177,6 +177,7 @@ export function LeadModal({
           </Field>
           <Field label="Etapa">
             <Select value={form.stage} onChange={(e) => set('stage', e.target.value)}>
+              {!form.stage ? <option value="">Sin etapa</option> : null}
               {stages.map((s: any) => (
                 <option key={s.documentId} value={s.documentId}>
                   {s.name}

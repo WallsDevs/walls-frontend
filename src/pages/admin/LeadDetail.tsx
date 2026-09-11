@@ -167,6 +167,7 @@ export default function LeadDetail() {
             onChange={(e) => stageMutation.mutate(e.target.value)}
             className="w-48"
           >
+            {!lead.stage ? <option value="">Sin etapa</option> : null}
             {(stages || []).map((s: any) => (
               <option key={s.documentId} value={s.documentId}>
                 {s.name}
