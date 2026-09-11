@@ -227,7 +227,7 @@ export default function Leads() {
   })
 
   const today = todayISO()
-  const isOverdue = (l: any) => l.stage?.outcome === 'open' && l.nextFollowUpDate && l.nextFollowUpDate < today
+  const isOverdue = (l: any) => (!l.stage || l.stage.outcome === 'open') && l.nextFollowUpDate && l.nextFollowUpDate < today
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -240,6 +240,10 @@ export default function Leads() {
 
   const overdueCount = (leads || []).filter(isOverdue).length
   const totalValue = filtered.reduce((s: number, l: any) => s + Number(l.estimatedValue || 0), 0)
+  const hasOrphans = filtered.some((l: any) => !l.stage)
+  const boardColumns = hasOrphans
+    ? [...(stages || []), { documentId: '__none__', name: 'Sin etapa', color: '#cbd5e1', __orphan: true }]
+    : stages || []
 
   if (isLoading || stagesLoading) return <PageLoader />
 
@@ -369,9 +373,9 @@ export default function Leads() {
           </tbody>
         </TableWrap>
       ) : (
-        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${stages!.length}, minmax(0, 1fr))` }}>
-          {stages!.map((s: any) => {
-            const list = filtered.filter((l: any) => l.stage?.documentId === s.documentId)
+        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${boardColumns.length}, minmax(0, 1fr))` }}>
+          {boardColumns.map((s: any) => {
+            const list = s.__orphan ? filtered.filter((l: any) => !l.stage) : filtered.filter((l: any) => l.stage?.documentId === s.documentId)
             return (
               <div key={s.documentId} className="rounded-xl bg-slate-200/50 p-2.5">
                 <div className="mb-2 flex items-center justify-between px-1">
@@ -381,6 +385,9 @@ export default function Leads() {
                   </span>
                   <span className="rounded-full bg-white px-1.5 text-xs text-slate-500">{list.length}</span>
                 </div>
+                {s.__orphan ? (
+                  <p className="mb-2 px-1 text-xs text-slate-400">Se quedaron sin etapa (se borró la que tenían). Ábrelos y asígnales una.</p>
+                ) : null}
                 <div className="space-y-2">
                   {list.map((l: any) => {
                     const overdue = isOverdue(l)
