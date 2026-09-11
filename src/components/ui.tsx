@@ -170,6 +170,19 @@ export function Badge({ children, tone = 'gray' }: { children: ReactNode; tone?:
   )
 }
 
+/** Badge con color libre (hex), para listas configurables por el usuario como etapas u orígenes de lead. */
+export function ColorBadge({ children, color }: { children: ReactNode; color?: string }) {
+  const c = color || '#94a3b8'
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
+      style={{ background: `${c}1a`, color: c }}
+    >
+      {children}
+    </span>
+  )
+}
+
 export const TASK_STATUS_TONES: Record<string, BadgeTone> = {
   todo: 'gray',
   in_progress: 'blue',
@@ -201,15 +214,6 @@ export const PRIORITY_TONES: Record<string, BadgeTone> = {
   medium: 'blue',
   high: 'amber',
   urgent: 'red',
-}
-
-export const LEAD_SOURCE_TONES: Record<string, BadgeTone> = {
-  referral: 'green',
-  cold_outreach: 'blue',
-  inbound: 'violet',
-  event: 'amber',
-  social: 'violet',
-  other: 'gray',
 }
 
 export const PIPELINE_OUTCOME_TONES: Record<string, BadgeTone> = {

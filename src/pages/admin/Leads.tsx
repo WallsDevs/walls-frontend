@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { LayoutGrid, List, Settings2, Target, Plus } from 'lucide-react'
+import { LayoutGrid, List, Settings2, Tags, Target, Plus } from 'lucide-react'
 import { rest } from '../../lib/api'
-import { money, todayISO } from '../../lib/format'
+import { todayISO } from '../../lib/format'
 import { useAuth } from '../../auth/AuthContext'
-import { LEAD_SOURCE_LABELS, LEAD_SOURCE_TONES } from '../../lib/labels'
+import { PRIORITY_LABELS } from '../../lib/labels'
 import {
   Badge,
   Button,
+  ColorBadge,
   EmptyState,
   ErrorNote,
   Field,
@@ -16,6 +17,7 @@ import {
   Modal,
   PageHeader,
   PageLoader,
+  PRIORITY_TONES,
   SearchInput,
   Select,
   Td,
@@ -33,9 +35,8 @@ const emptyForm = () => ({
   website: '',
   linkedinUrl: '',
   country: '',
-  estimatedValue: '',
-  currency: 'USD',
-  source: 'other',
+  source: '',
+  urgency: 'medium',
   ownerName: '',
   nextFollowUpDate: '',
   notes: '',
@@ -47,12 +48,14 @@ export function LeadModal({
   onClose,
   lead,
   stages,
+  sources,
   defaultStage,
 }: {
   open: boolean
   onClose: () => void
   lead?: any | null
   stages: any[]
+  sources: any[]
   defaultStage?: string
 }) {
   const qc = useQueryClient()
@@ -75,9 +78,8 @@ export function LeadModal({
             website: lead.website || '',
             linkedinUrl: lead.linkedinUrl || '',
             country: lead.country || '',
-            estimatedValue: String(lead.estimatedValue ?? ''),
-            currency: lead.currency || 'USD',
-            source: lead.source || 'other',
+            source: lead.source?.documentId || '',
+            urgency: lead.urgency || 'medium',
             ownerName: lead.ownerName || '',
             nextFollowUpDate: lead.nextFollowUpDate || '',
             notes: lead.notes || '',
@@ -99,9 +101,8 @@ export function LeadModal({
         website: form.website || null,
         linkedinUrl: form.linkedinUrl || null,
         country: form.country || null,
-        estimatedValue: Number(form.estimatedValue) || 0,
-        currency: form.currency || 'USD',
-        source: form.source,
+        source: form.source || null,
+        urgency: form.urgency,
         ownerName: form.ownerName || null,
         nextFollowUpDate: form.nextFollowUpDate || null,
         notes: form.notes || null,
@@ -158,34 +159,36 @@ export function LeadModal({
           <Input value={form.country} onChange={(e) => set('country', e.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Valor estimado">
-            <Input type="number" min={0} step="100" value={form.estimatedValue} onChange={(e) => set('estimatedValue', e.target.value)} placeholder="15000" />
-          </Field>
-          <Field label="Moneda">
-            <Input value={form.currency} onChange={(e) => set('currency', e.target.value.toUpperCase())} placeholder="USD" />
-          </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
           <Field label="Origen">
             <Select value={form.source} onChange={(e) => set('source', e.target.value)}>
-              {Object.entries(LEAD_SOURCE_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Etapa">
-            <Select value={form.stage} onChange={(e) => set('stage', e.target.value)}>
-              {!form.stage ? <option value="">Sin etapa</option> : null}
-              {stages.map((s: any) => (
+              {!form.source ? <option value="">Sin origen</option> : null}
+              {sources.map((s: any) => (
                 <option key={s.documentId} value={s.documentId}>
                   {s.name}
                 </option>
               ))}
             </Select>
           </Field>
+          <Field label="Urgencia">
+            <Select value={form.urgency} onChange={(e) => set('urgency', e.target.value)}>
+              {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
+        <Field label="Etapa">
+          <Select value={form.stage} onChange={(e) => set('stage', e.target.value)}>
+            {!form.stage ? <option value="">Sin etapa</option> : null}
+            {stages.map((s: any) => (
+              <option key={s.documentId} value={s.documentId}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Dueño del lead" hint="Quién lo está trabajando">
             <Input value={form.ownerName} onChange={(e) => set('ownerName', e.target.value)} />
@@ -216,7 +219,7 @@ export default function Leads() {
     queryKey: ['leads'],
     queryFn: () =>
       rest.list('leads', {
-        populate: { stage: true },
+        populate: { stage: true, source: true },
         sort: 'updatedAt:desc',
         pagination: { pageSize: 300 },
       }),
@@ -225,6 +228,11 @@ export default function Leads() {
   const { data: stages, isLoading: stagesLoading } = useQuery({
     queryKey: ['pipeline-stages'],
     queryFn: () => rest.list('pipeline-stages', { sort: 'position:asc', pagination: { pageSize: 100 } }),
+  })
+
+  const { data: sources, isLoading: sourcesLoading } = useQuery({
+    queryKey: ['lead-sources'],
+    queryFn: () => rest.list('lead-sources', { sort: 'position:asc', pagination: { pageSize: 100 } }),
   })
 
   const today = todayISO()
@@ -240,19 +248,18 @@ export default function Leads() {
   }, [leads, search, stageFilter])
 
   const overdueCount = (leads || []).filter(isOverdue).length
-  const totalValue = filtered.reduce((s: number, l: any) => s + Number(l.estimatedValue || 0), 0)
   const hasOrphans = filtered.some((l: any) => !l.stage)
   const boardColumns = hasOrphans
     ? [...(stages || []), { documentId: '__none__', name: 'Sin etapa', color: '#cbd5e1', __orphan: true }]
     : stages || []
 
-  if (isLoading || stagesLoading) return <PageLoader />
+  if (isLoading || stagesLoading || sourcesLoading) return <PageLoader />
 
   return (
     <div>
       <PageHeader
         title="Leads"
-        subtitle={`${filtered.length} leads · ${money(totalValue)} en el embudo`}
+        subtitle={`${filtered.length} leads`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {overdueCount > 0 ? <Badge tone="red">{overdueCount} vencidos</Badge> : null}
@@ -299,9 +306,14 @@ export default function Leads() {
             ))}
           </Select>
         ) : null}
-        <Link to="/pipeline-stages" className="ml-0 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700 sm:ml-auto">
-          <Settings2 size={15} /> Configurar etapas
-        </Link>
+        <div className="ml-0 flex items-center gap-3 sm:ml-auto">
+          <Link to="/lead-sources" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700">
+            <Tags size={15} /> Configurar orígenes
+          </Link>
+          <Link to="/pipeline-stages" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700">
+            <Settings2 size={15} /> Configurar etapas
+          </Link>
+        </div>
       </div>
 
       {!stages?.length ? (
@@ -332,7 +344,7 @@ export default function Leads() {
               <Th>Empresa</Th>
               <Th>Contacto</Th>
               <Th>Origen</Th>
-              <Th right>Valor</Th>
+              <Th>Urgencia</Th>
               <Th>Etapa</Th>
               <Th>Dueño</Th>
               <Th>Seguimiento</Th>
@@ -345,10 +357,10 @@ export default function Leads() {
                   <p className="font-medium text-slate-900">{l.companyName}</p>
                 </Td>
                 <Td className="text-slate-600">{l.contactName || '—'}</Td>
+                <Td>{l.source ? <ColorBadge color={l.source.color}>{l.source.name}</ColorBadge> : '—'}</Td>
                 <Td>
-                  <Badge tone={LEAD_SOURCE_TONES[l.source] || 'gray'}>{LEAD_SOURCE_LABELS[l.source]}</Badge>
+                  <Badge tone={PRIORITY_TONES[l.urgency] || 'gray'}>{PRIORITY_LABELS[l.urgency]}</Badge>
                 </Td>
-                <Td right className="font-medium">{money(l.estimatedValue, l.currency)}</Td>
                 <Td>
                   {l.stage ? (
                     <span className="inline-flex items-center gap-1.5">
@@ -421,9 +433,9 @@ export default function Leads() {
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-2 flex items-center gap-1.5">
-                          <Badge tone={LEAD_SOURCE_TONES[l.source] || 'gray'}>{LEAD_SOURCE_LABELS[l.source]}</Badge>
-                          <span className="ml-auto text-xs font-semibold text-slate-900">{money(l.estimatedValue, l.currency)}</span>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {l.source ? <ColorBadge color={l.source.color}>{l.source.name}</ColorBadge> : null}
+                          <Badge tone={PRIORITY_TONES[l.urgency] || 'gray'}>{PRIORITY_LABELS[l.urgency]}</Badge>
                         </div>
                         {overdue ? (
                           <div className="mt-1.5 flex items-center justify-between">
@@ -444,7 +456,14 @@ export default function Leads() {
         </div>
       )}
 
-      <LeadModal open={modal.open} onClose={() => setModal({ open: false })} lead={modal.lead} stages={stages || []} defaultStage={modal.defaultStage} />
+      <LeadModal
+        open={modal.open}
+        onClose={() => setModal({ open: false })}
+        lead={modal.lead}
+        stages={stages || []}
+        sources={sources || []}
+        defaultStage={modal.defaultStage}
+      />
     </div>
   )
 }

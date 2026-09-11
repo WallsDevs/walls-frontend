@@ -70,15 +70,6 @@ export const MILESTONE_STATUS_LABELS: Record<string, string> = {
   delivered: 'Entregado',
 }
 
-export const LEAD_SOURCE_LABELS: Record<string, string> = {
-  referral: 'Referido',
-  cold_outreach: 'Outbound',
-  inbound: 'Inbound',
-  event: 'Evento',
-  social: 'Redes',
-  other: 'Otro',
-}
-
 export const LEAD_ACTIVITY_KIND_LABELS: Record<string, string> = {
   call: 'Llamada',
   email: 'Correo',
@@ -94,4 +85,4 @@ export const PIPELINE_OUTCOME_LABELS: Record<string, string> = {
   lost: 'Perdida',
 }
 
-export { QUOTE_STATUS_TONES, MILESTONE_STATUS_TONES, LEAD_SOURCE_TONES, PIPELINE_OUTCOME_TONES } from '../components/ui'
+export { QUOTE_STATUS_TONES, MILESTONE_STATUS_TONES, PIPELINE_OUTCOME_TONES } from '../components/ui'

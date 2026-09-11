@@ -15,18 +15,20 @@ import {
   Users,
 } from 'lucide-react'
 import { api, rest } from '../../lib/api'
-import { fmtDate, money } from '../../lib/format'
-import { LEAD_ACTIVITY_KIND_LABELS, LEAD_SOURCE_LABELS, LEAD_SOURCE_TONES } from '../../lib/labels'
+import { fmtDate } from '../../lib/format'
+import { LEAD_ACTIVITY_KIND_LABELS, PRIORITY_LABELS } from '../../lib/labels'
 import {
   Badge,
   Button,
   Card,
+  ColorBadge,
   ConfirmDialog,
   ErrorNote,
   Field,
   Input,
   Modal,
   PageLoader,
+  PRIORITY_TONES,
   Select,
   Textarea,
 } from '../../components/ui'
@@ -113,13 +115,18 @@ export default function LeadDetail() {
     queryKey: ['lead', documentId],
     queryFn: () =>
       rest.one('leads', documentId, {
-        populate: { stage: true, activities: true, convertedToClient: true },
+        populate: { stage: true, source: true, activities: true, convertedToClient: true },
       }),
   })
 
   const { data: stages } = useQuery({
     queryKey: ['pipeline-stages'],
     queryFn: () => rest.list('pipeline-stages', { sort: 'position:asc', pagination: { pageSize: 100 } }),
+  })
+
+  const { data: sources } = useQuery({
+    queryKey: ['lead-sources'],
+    queryFn: () => rest.list('lead-sources', { sort: 'position:asc', pagination: { pageSize: 100 } }),
   })
 
   const stageMutation = useMutation({
@@ -156,7 +163,10 @@ export default function LeadDetail() {
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">{lead.companyName}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">{lead.companyName}</h1>
+            <Badge tone={PRIORITY_TONES[lead.urgency] || 'gray'}>{PRIORITY_LABELS[lead.urgency]}</Badge>
+          </div>
           <p className="mt-1 text-sm text-slate-500">
             {[lead.contactName, lead.contactEmail, lead.contactPhone].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
           </p>
@@ -197,14 +207,8 @@ export default function LeadDetail() {
           <p className="mb-3.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Datos del lead</p>
           <div className="space-y-3.5 text-sm">
             <div>
-              <p className="mb-0.5 text-xs text-slate-500">Valor estimado</p>
-              <p className="text-lg font-semibold text-slate-900">
-                {money(lead.estimatedValue, lead.currency)} <span className="text-xs font-normal text-slate-400">{lead.currency}</span>
-              </p>
-            </div>
-            <div>
               <p className="mb-0.5 text-xs text-slate-500">Origen</p>
-              <Badge tone={LEAD_SOURCE_TONES[lead.source] || 'gray'}>{LEAD_SOURCE_LABELS[lead.source]}</Badge>
+              {lead.source ? <ColorBadge color={lead.source.color}>{lead.source.name}</ColorBadge> : <p className="text-slate-400">Sin origen</p>}
             </div>
             {lead.country ? (
               <div>
@@ -286,7 +290,7 @@ export default function LeadDetail() {
         </Card>
       </div>
 
-      <LeadModal open={editing} onClose={() => setEditing(false)} lead={lead} stages={stages || []} />
+      <LeadModal open={editing} onClose={() => setEditing(false)} lead={lead} stages={stages || []} sources={sources || []} />
       <ActivityModal open={activityModal} onClose={() => setActivityModal(false)} leadId={documentId} />
       <ConfirmDialog
         open={deleting}
