@@ -13,6 +13,7 @@ import {
   Clock3,
   LogOut,
   Menu,
+  Target,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -28,6 +29,7 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     { to: '/projects', label: 'Proyectos', icon: FolderKanban },
     { to: '/tasks', label: 'Tareas', icon: ListTodo },
     { to: '/quotes', label: 'Presupuestos', icon: FileSpreadsheet },
+    { to: '/leads', label: 'Leads', icon: Target },
     { to: '/billing', label: 'Facturación', icon: Receipt },
     { to: '/clients', label: 'Clientes', icon: Building2 },
     { to: '/staff', label: 'Equipo interno', icon: Briefcase },

@@ -14,6 +14,9 @@ import Clients from './pages/admin/Clients'
 import Staff from './pages/admin/Staff'
 import Quotes from './pages/admin/Quotes'
 import QuoteDetail from './pages/admin/QuoteDetail'
+import Leads from './pages/admin/Leads'
+import LeadDetail from './pages/admin/LeadDetail'
+import PipelineStages from './pages/admin/PipelineStages'
 import PersonalInvoices from './pages/admin/PersonalInvoices'
 import PersonalInvoicePage from './pages/admin/PersonalInvoicePage'
 import PersonalInvoiceEditor from './pages/admin/PersonalInvoiceEditor'
@@ -38,6 +41,9 @@ function AdminRoutes() {
       <Route path="staff" element={<Staff />} />
       <Route path="quotes" element={<Quotes />} />
       <Route path="quotes/:documentId" element={<QuoteDetail />} />
+      <Route path="leads" element={<Leads />} />
+      <Route path="leads/:documentId" element={<LeadDetail />} />
+      <Route path="pipeline-stages" element={<PipelineStages />} />
       <Route path="personal-invoices" element={<PersonalInvoices />} />
       <Route path="personal-invoices/new" element={<PersonalInvoiceEditor />} />
       <Route path="personal-invoices/:documentId/edit" element={<PersonalInvoiceEditor />} />

@@ -203,6 +203,21 @@ export const PRIORITY_TONES: Record<string, BadgeTone> = {
   urgent: 'red',
 }
 
+export const LEAD_SOURCE_TONES: Record<string, BadgeTone> = {
+  referral: 'green',
+  cold_outreach: 'blue',
+  inbound: 'violet',
+  event: 'amber',
+  social: 'violet',
+  other: 'gray',
+}
+
+export const PIPELINE_OUTCOME_TONES: Record<string, BadgeTone> = {
+  open: 'gray',
+  won: 'green',
+  lost: 'red',
+}
+
 /* ---------- Modal ---------- */
 
 export function Modal({
