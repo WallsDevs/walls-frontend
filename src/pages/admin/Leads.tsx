@@ -30,6 +30,9 @@ const emptyForm = () => ({
   contactName: '',
   contactEmail: '',
   contactPhone: '',
+  website: '',
+  linkedinUrl: '',
+  country: '',
   estimatedValue: '',
   currency: 'USD',
   source: 'other',
@@ -69,6 +72,9 @@ export function LeadModal({
             contactName: lead.contactName || '',
             contactEmail: lead.contactEmail || '',
             contactPhone: lead.contactPhone || '',
+            website: lead.website || '',
+            linkedinUrl: lead.linkedinUrl || '',
+            country: lead.country || '',
             estimatedValue: String(lead.estimatedValue ?? ''),
             currency: lead.currency || 'USD',
             source: lead.source || 'other',
@@ -90,6 +96,9 @@ export function LeadModal({
         contactName: form.contactName || null,
         contactEmail: form.contactEmail || null,
         contactPhone: form.contactPhone || null,
+        website: form.website || null,
+        linkedinUrl: form.linkedinUrl || null,
+        country: form.country || null,
         estimatedValue: Number(form.estimatedValue) || 0,
         currency: form.currency || 'USD',
         source: form.source,
@@ -136,6 +145,17 @@ export function LeadModal({
         </div>
         <Field label="Correo">
           <Input type="email" value={form.contactEmail} onChange={(e) => set('contactEmail', e.target.value)} />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Sitio web">
+            <Input value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://…" />
+          </Field>
+          <Field label="LinkedIn">
+            <Input value={form.linkedinUrl} onChange={(e) => set('linkedinUrl', e.target.value)} placeholder="https://linkedin.com/in/…" />
+          </Field>
+        </div>
+        <Field label="País">
+          <Input value={form.country} onChange={(e) => set('country', e.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Valor estimado">

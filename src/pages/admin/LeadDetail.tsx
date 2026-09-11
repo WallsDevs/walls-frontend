@@ -205,6 +205,28 @@ export default function LeadDetail() {
               <p className="mb-0.5 text-xs text-slate-500">Origen</p>
               <Badge tone={LEAD_SOURCE_TONES[lead.source] || 'gray'}>{LEAD_SOURCE_LABELS[lead.source]}</Badge>
             </div>
+            {lead.country ? (
+              <div>
+                <p className="mb-0.5 text-xs text-slate-500">País</p>
+                <p className="text-slate-700">{lead.country}</p>
+              </div>
+            ) : null}
+            {lead.website ? (
+              <div>
+                <p className="mb-0.5 text-xs text-slate-500">Sitio web</p>
+                <a href={lead.website} target="_blank" rel="noreferrer" className="break-all text-brand-600 hover:text-brand-700">
+                  {lead.website}
+                </a>
+              </div>
+            ) : null}
+            {lead.linkedinUrl ? (
+              <div>
+                <p className="mb-0.5 text-xs text-slate-500">LinkedIn</p>
+                <a href={lead.linkedinUrl} target="_blank" rel="noreferrer" className="break-all text-brand-600 hover:text-brand-700">
+                  {lead.linkedinUrl}
+                </a>
+              </div>
+            ) : null}
             <div>
               <p className="mb-0.5 text-xs text-slate-500">Dueño del lead</p>
               <p className="text-slate-700">{lead.ownerName || '—'}</p>
