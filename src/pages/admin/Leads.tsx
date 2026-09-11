@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { LayoutGrid, List, Settings2, Tags, Target, Plus } from 'lucide-react'
+import { LayoutGrid, List, Settings2, Tags, Target, Plus, Trash2 } from 'lucide-react'
 import { rest } from '../../lib/api'
 import { todayISO } from '../../lib/format'
 import { useAuth } from '../../auth/AuthContext'
@@ -10,6 +10,7 @@ import {
   Badge,
   Button,
   ColorBadge,
+  ConfirmDialog,
   EmptyState,
   ErrorNote,
   Field,
@@ -210,10 +211,14 @@ type ViewMode = 'list' | 'board'
 
 export default function Leads() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const [view, setView] = useState<ViewMode>('board')
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState('')
   const [modal, setModal] = useState<{ open: boolean; lead?: any; defaultStage?: string }>({ open: false })
+  const [deleting, setDeleting] = useState<any | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null)
 
   const { data: leads, isLoading } = useQuery({
     queryKey: ['leads'],
@@ -223,6 +228,19 @@ export default function Leads() {
         sort: 'updatedAt:desc',
         pagination: { pageSize: 300 },
       }),
+  })
+
+  const stageMutation = useMutation({
+    mutationFn: ({ id, stage }: { id: string; stage: string | null }) => rest.update('leads', id, { stage }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['leads'] }),
+  })
+
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => rest.remove('leads', id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['leads'] })
+      setDeleting(null)
+    },
   })
 
   const { data: stages, isLoading: stagesLoading } = useQuery({
@@ -348,6 +366,7 @@ export default function Leads() {
               <Th>Etapa</Th>
               <Th>Dueño</Th>
               <Th>Seguimiento</Th>
+              <Th />
             </tr>
           </thead>
           <tbody>
@@ -381,6 +400,17 @@ export default function Leads() {
                     <span className="text-slate-300">—</span>
                   )}
                 </Td>
+                <Td>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDeleting(l)
+                    }}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </Td>
               </tr>
             ))}
           </tbody>
@@ -389,8 +419,30 @@ export default function Leads() {
         <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${boardColumns.length}, minmax(0, 1fr))` }}>
           {boardColumns.map((s: any) => {
             const list = s.__orphan ? filtered.filter((l: any) => !l.stage) : filtered.filter((l: any) => l.stage?.documentId === s.documentId)
+            const dropTargetStage = s.__orphan ? null : s.documentId
             return (
-              <div key={s.documentId} className="rounded-xl bg-slate-200/50 p-2.5">
+              <div
+                key={s.documentId}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setDragOverStage(s.documentId)
+                }}
+                onDragLeave={() => setDragOverStage((cur) => (cur === s.documentId ? null : cur))}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const id = e.dataTransfer.getData('text/plain')
+                  setDragOverStage(null)
+                  setDraggingId(null)
+                  if (!id) return
+                  const lead = (leads || []).find((l: any) => l.documentId === id)
+                  if (lead?.stage?.documentId === dropTargetStage) return
+                  stageMutation.mutate({ id, stage: dropTargetStage })
+                }}
+                className={cx(
+                  'rounded-xl bg-slate-200/50 p-2.5 transition-colors',
+                  dragOverStage === s.documentId && 'bg-brand-100/60 ring-2 ring-brand-300',
+                )}
+              >
                 <div className="mb-2 flex items-center justify-between px-1">
                   <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     <span className="inline-block size-2 rounded-full" style={{ background: s.color || '#94a3b8' }} />
@@ -399,21 +451,41 @@ export default function Leads() {
                   <span className="rounded-full bg-white px-1.5 text-xs text-slate-500">{list.length}</span>
                 </div>
                 {s.__orphan ? (
-                  <p className="mb-2 px-1 text-xs text-slate-400">Se quedaron sin etapa (se borró la que tenían). Ábrelos y asígnales una.</p>
+                  <p className="mb-2 px-1 text-xs text-slate-400">Se quedaron sin etapa (se borró la que tenían). Arrástralos a una columna.</p>
                 ) : null}
                 <div className="space-y-2">
                   {list.map((l: any) => {
                     const overdue = isOverdue(l)
                     return (
-                      <button
+                      <div
                         key={l.documentId}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/plain', l.documentId)
+                          e.dataTransfer.effectAllowed = 'move'
+                          setDraggingId(l.documentId)
+                        }}
+                        onDragEnd={() => {
+                          setDraggingId(null)
+                          setDragOverStage(null)
+                        }}
                         onClick={() => navigate(`/leads/${l.documentId}`)}
                         className={cx(
-                          'w-full rounded-lg border bg-white p-3 text-left shadow-sm transition-shadow hover:shadow-md',
+                          'group relative w-full cursor-grab rounded-lg border bg-white p-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
                           overdue ? 'border-red-200' : 'border-slate-200',
+                          draggingId === l.documentId && 'opacity-40',
                         )}
                       >
-                        <div className="flex items-start justify-between gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDeleting(l)
+                          }}
+                          className="absolute right-2 top-2 rounded-lg p-1 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                        <div className="flex items-start justify-between gap-2 pr-5">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium text-slate-900">{l.companyName}</p>
                             {l.contactName ? <p className="truncate text-xs text-slate-500">{l.contactName}</p> : null}
@@ -445,7 +517,7 @@ export default function Leads() {
                         ) : l.nextFollowUpDate ? (
                           <p className="mt-1.5 text-xs text-slate-400">Seguimiento {l.nextFollowUpDate}</p>
                         ) : null}
-                      </button>
+                      </div>
                     )
                   })}
                   {!list.length && <p className="px-1 py-3 text-center text-xs text-slate-400">Vacío</p>}
@@ -463,6 +535,14 @@ export default function Leads() {
         stages={stages || []}
         sources={sources || []}
         defaultStage={modal.defaultStage}
+      />
+      <ConfirmDialog
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => removeMutation.mutate(deleting.documentId)}
+        loading={removeMutation.isPending}
+        title="Eliminar lead"
+        message={`¿Eliminar ${deleting?.companyName} y todo su historial de seguimiento?`}
       />
     </div>
   )
