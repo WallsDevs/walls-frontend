@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { LayoutGrid, List, Settings2, Tags, Target, Plus, Trash2 } from 'lucide-react'
+import { Globe, Link2, LayoutGrid, List, Settings2, Tags, Target, Plus, Trash2 } from 'lucide-react'
 import { rest } from '../../lib/api'
 import { todayISO } from '../../lib/format'
 import { useAuth } from '../../auth/AuthContext'
@@ -27,6 +27,13 @@ import {
   TableWrap,
   cx,
 } from '../../components/ui'
+
+const URGENCY_STRIPE: Record<string, string> = {
+  low: '#94a3b8',
+  medium: '#2a78d6',
+  high: '#d97706',
+  urgent: '#dc2626',
+}
 
 const emptyForm = () => ({
   companyName: '',
@@ -378,7 +385,7 @@ export default function Leads() {
                 <Td className="text-slate-600">{l.contactName || '—'}</Td>
                 <Td>{l.source ? <ColorBadge color={l.source.color}>{l.source.name}</ColorBadge> : '—'}</Td>
                 <Td>
-                  <Badge tone={PRIORITY_TONES[l.urgency] || 'gray'}>{PRIORITY_LABELS[l.urgency]}</Badge>
+                  {l.urgency ? <Badge tone={PRIORITY_TONES[l.urgency] || 'gray'}>{PRIORITY_LABELS[l.urgency]}</Badge> : '—'}
                 </Td>
                 <Td>
                   {l.stage ? (
@@ -471,11 +478,14 @@ export default function Leads() {
                         }}
                         onClick={() => navigate(`/leads/${l.documentId}`)}
                         className={cx(
-                          'group relative w-full cursor-grab rounded-lg border bg-white p-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
+                          'group relative w-full cursor-grab overflow-hidden rounded-lg border bg-white py-3 pl-3.5 pr-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
                           overdue ? 'border-red-200' : 'border-slate-200',
                           draggingId === l.documentId && 'opacity-40',
                         )}
                       >
+                        {l.urgency ? (
+                          <span className="absolute inset-y-0 left-0 w-1" style={{ background: URGENCY_STRIPE[l.urgency] || '#94a3b8' }} />
+                        ) : null}
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
@@ -486,14 +496,30 @@ export default function Leads() {
                           <Trash2 size={13} />
                         </button>
                         <div className="flex items-start justify-between gap-2 pr-5">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-slate-900">{l.companyName}</p>
-                            {l.contactName ? <p className="truncate text-xs text-slate-500">{l.contactName}</p> : null}
-                          </div>
+                          <p className="truncate text-sm font-medium text-slate-900">{l.companyName}</p>
+                          {l.urgency ? <Badge tone={PRIORITY_TONES[l.urgency] || 'gray'}>{PRIORITY_LABELS[l.urgency]}</Badge> : null}
+                        </div>
+                        {l.contactName || l.country ? (
+                          <p className="mt-0.5 truncate text-xs text-slate-500">
+                            {[l.contactName, l.country].filter(Boolean).join(' · ')}
+                          </p>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {l.source ? <ColorBadge color={l.source.color}>{l.source.name}</ColorBadge> : null}
+                          {l.website ? (
+                            <span title={l.website} className="flex size-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                              <Globe size={11} />
+                            </span>
+                          ) : null}
+                          {l.linkedinUrl ? (
+                            <span title={l.linkedinUrl} className="flex size-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                              <Link2 size={11} />
+                            </span>
+                          ) : null}
                           {l.ownerName ? (
                             <span
                               title={l.ownerName}
-                              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
+                              className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
                             >
                               {l.ownerName
                                 .split(' ')
@@ -504,10 +530,6 @@ export default function Leads() {
                                 .toUpperCase()}
                             </span>
                           ) : null}
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          {l.source ? <ColorBadge color={l.source.color}>{l.source.name}</ColorBadge> : null}
-                          <Badge tone={PRIORITY_TONES[l.urgency] || 'gray'}>{PRIORITY_LABELS[l.urgency]}</Badge>
                         </div>
                         {overdue ? (
                           <div className="mt-1.5 flex items-center justify-between">
