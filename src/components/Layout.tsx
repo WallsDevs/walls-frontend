@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   Users,
@@ -164,8 +164,13 @@ function SidebarContent({ onNavigate, collapsed }: { onNavigate?: () => void; co
   )
 }
 
+// Páginas que aprovechan todo el ancho (tableros con muchas columnas) en vez del máximo de lectura.
+const FULL_WIDTH_PATHS = ['/leads']
+
 export default function Layout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
+  const { pathname } = useLocation()
+  const fullWidth = FULL_WIDTH_PATHS.includes(pathname)
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(COLLAPSE_KEY) === '1'
@@ -240,7 +245,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       )}
 
       <main className={cx('px-4 py-6 transition-[margin] duration-200 sm:px-6 lg:px-8', collapsed ? 'lg:ml-16' : 'lg:ml-64')}>
-        <div className="mx-auto max-w-6xl">{children}</div>
+        <div className={cx('mx-auto', fullWidth ? 'max-w-none' : 'max-w-6xl')}>{children}</div>
       </main>
     </div>
   )

@@ -546,8 +546,8 @@ export default function Leads() {
         </TableWrap>
       ) : (
         <div
-          className="grid gap-3"
-          style={{ gridTemplateColumns: boardColumns.map((s: any) => (isCollapsed(s) ? '3rem' : 'minmax(0, 1fr)')).join(' ') }}
+          className="grid gap-3 overflow-x-auto pb-2"
+          style={{ gridTemplateColumns: boardColumns.map((s: any) => (isCollapsed(s) ? '3rem' : 'minmax(220px, 1fr)')).join(' ') }}
         >
           {boardColumns.map((s: any) => {
             const list = filtered.filter((l: any) => (l.stage?.documentId ?? entryStageId) === s.documentId)
