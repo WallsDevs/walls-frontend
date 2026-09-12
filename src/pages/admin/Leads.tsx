@@ -226,6 +226,7 @@ export default function Leads() {
   const [urgencyFilter, setUrgencyFilter] = useState('')
   const [countryFilter, setCountryFilter] = useState('')
   const [overdueOnly, setOverdueOnly] = useState(false)
+  const [showUnassigned, setShowUnassigned] = useState(true)
   const [modal, setModal] = useState<{ open: boolean; lead?: any; defaultStage?: string }>({ open: false })
   const [deleting, setDeleting] = useState<any | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -295,8 +296,10 @@ export default function Leads() {
     setCountryFilter('')
     setOverdueOnly(false)
   }
-  const hasOrphans = filtered.some((l: any) => !l.stage)
-  const boardColumns = hasOrphans
+  // Independiente de los filtros: si existe al menos un lead sin etapa en todo el dataset, la columna
+  // se mantiene visible (con "Vacío" si el filtro no deja ver ninguno), en vez de aparecer y desaparecer.
+  const hasOrphans = (leads || []).some((l: any) => !l.stage)
+  const boardColumns = hasOrphans && showUnassigned
     ? [...(stages || []), { documentId: '__none__', name: 'Sin etapa', color: '#cbd5e1', __orphan: true }]
     : stages || []
 
@@ -398,6 +401,28 @@ export default function Leads() {
         >
           Solo vencidos
         </button>
+        {view === 'board' && hasOrphans ? (
+          <label className="flex cursor-pointer select-none items-center gap-2 whitespace-nowrap text-sm text-slate-600">
+            <span
+              className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+              style={{ background: showUnassigned ? '#2a78d6' : '#cbd5e1' }}
+            >
+              <input
+                type="checkbox"
+                checked={showUnassigned}
+                onChange={(e) => setShowUnassigned(e.target.checked)}
+                className="sr-only"
+              />
+              <span
+                className={cx(
+                  'inline-block size-4 transform rounded-full bg-white shadow transition-transform',
+                  showUnassigned ? 'translate-x-4' : 'translate-x-1',
+                )}
+              />
+            </span>
+            Ver sin etapa
+          </label>
+        ) : null}
         {hasActiveFilters ? (
           <button onClick={clearFilters} className="text-sm font-medium text-slate-400 hover:text-slate-600">
             Limpiar filtros
