@@ -11,6 +11,8 @@ import {
   FileSpreadsheet,
   Wallet,
   Clock3,
+  ChevronLeft,
+  ChevronRight,
   LogOut,
   Menu,
   Target,
@@ -51,21 +53,25 @@ const ROLE_LABELS: Record<string, string> = {
   client: 'Portal del cliente',
 }
 
-function Brand() {
+const COLLAPSE_KEY = 'walls_sidebar_collapsed'
+
+function Brand({ collapsed }: { collapsed?: boolean }) {
   return (
-    <div className="flex items-center gap-2.5 px-2">
-      <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 to-brand-700 text-sm font-bold text-white shadow-sm">
+    <div className={cx('flex items-center gap-2.5', collapsed ? 'justify-center px-0' : 'px-2')}>
+      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 to-brand-700 text-sm font-bold text-white shadow-sm">
         W
       </div>
-      <div className="leading-tight">
-        <p className="text-sm font-semibold text-white">Walls</p>
-        <p className="text-[11px] text-slate-400">Panel administrativo</p>
-      </div>
+      {!collapsed ? (
+        <div className="min-w-0 leading-tight">
+          <p className="truncate text-sm font-semibold text-white">Walls</p>
+          <p className="truncate text-[11px] text-slate-400">Panel administrativo</p>
+        </div>
+      ) : null}
     </div>
   )
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const { auth, logout } = useAuth()
   const role = auth?.me.role || 'authenticated'
   const items = NAV_BY_ROLE[role] || []
@@ -82,59 +88,52 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       ? `${auth.me.profile.firstName} ${auth.me.profile.lastName ?? ''}`.trim()
       : auth?.me.profile?.name || auth?.me.username || ''
 
+  const linkCls = ({ isActive }: { isActive: boolean }) =>
+    cx(
+      'flex items-center gap-2.5 rounded-lg py-2 text-sm font-medium transition-colors',
+      collapsed ? 'justify-center px-0' : 'px-2.5',
+      isActive ? 'bg-brand-500/20 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white',
+    )
+
   return (
     <div className="flex h-full flex-col">
       <div className="px-3 pb-6 pt-5">
-        <Brand />
+        <Brand collapsed={collapsed} />
       </div>
-      <p className="mb-2 px-5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-        {ROLE_LABELS[role] || 'Menú'}
-      </p>
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3">
+      {!collapsed ? (
+        <p className="mb-2 px-5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          {ROLE_LABELS[role] || 'Menú'}
+        </p>
+      ) : null}
+      <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-3">
         {items.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              cx(
-                'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
-                isActive ? 'bg-brand-500/20 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white',
-              )
-            }
-          >
+          <NavLink key={item.to} to={item.to} end={item.end} onClick={onNavigate} className={linkCls} title={collapsed ? item.label : undefined}>
             <item.icon size={17} className="shrink-0" />
-            {item.label}
+            {!collapsed ? item.label : null}
           </NavLink>
         ))}
         {myWork.length > 0 && (
           <>
-            <p className="px-2.5 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              Mi trabajo
-            </p>
+            {!collapsed ? (
+              <p className="px-2.5 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Mi trabajo</p>
+            ) : (
+              <div className="my-2 border-t border-white/10" />
+            )}
             {myWork.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={onNavigate}
-                className={({ isActive }) =>
-                  cx(
-                    'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors',
-                    isActive ? 'bg-brand-500/20 text-white' : 'text-slate-300 hover:bg-white/5 hover:text-white',
-                  )
-                }
-              >
+              <NavLink key={item.to} to={item.to} onClick={onNavigate} className={linkCls} title={collapsed ? item.label : undefined}>
                 <item.icon size={17} className="shrink-0" />
-                {item.label}
+                {!collapsed ? item.label : null}
               </NavLink>
             ))}
           </>
         )}
       </nav>
       <div className="border-t border-white/10 p-3">
-        <div className="mb-2 flex items-center gap-2.5 px-2">
-          <div className="flex size-8 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white">
+        <div className={cx('mb-2 flex items-center gap-2.5', collapsed ? 'justify-center px-0' : 'px-2')}>
+          <div
+            title={collapsed ? name : undefined}
+            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white"
+          >
             {(name || '?')
               .split(' ')
               .slice(0, 2)
@@ -142,17 +141,23 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               .join('')
               .toUpperCase()}
           </div>
-          <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-medium text-white">{name}</p>
-            <p className="truncate text-[11px] text-slate-400">{auth?.me.email}</p>
-          </div>
+          {!collapsed ? (
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-sm font-medium text-white">{name}</p>
+              <p className="truncate text-[11px] text-slate-400">{auth?.me.email}</p>
+            </div>
+          ) : null}
         </div>
         <button
           onClick={logout}
-          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+          title={collapsed ? 'Cerrar sesión' : undefined}
+          className={cx(
+            'flex w-full items-center gap-2.5 rounded-lg py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white',
+            collapsed ? 'justify-center px-0' : 'px-2.5',
+          )}
         >
           <LogOut size={17} />
-          Cerrar sesión
+          {!collapsed ? 'Cerrar sesión' : null}
         </button>
       </div>
     </div>
@@ -161,12 +166,43 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function Layout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+
+  const toggleCollapsed = () => {
+    setCollapsed((v) => {
+      const next = !v
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0')
+      } catch {
+        // localStorage puede fallar en modo privado; no es crítico
+      }
+      return next
+    })
+  }
 
   return (
     <div className="min-h-screen">
       {/* Sidebar escritorio */}
-      <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 bg-slate-900 lg:block">
-        <SidebarContent />
+      <aside
+        className={cx(
+          'no-print fixed inset-y-0 left-0 z-30 hidden bg-slate-900 transition-[width] duration-200 lg:block',
+          collapsed ? 'w-16' : 'w-64',
+        )}
+      >
+        <SidebarContent collapsed={collapsed} />
+        <button
+          onClick={toggleCollapsed}
+          title={collapsed ? 'Expandir menú' : 'Contraer menú'}
+          className="absolute -right-3 top-6 flex size-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm hover:text-slate-800"
+        >
+          {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+        </button>
       </aside>
 
       {/* Topbar móvil */}
@@ -203,7 +239,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <main className="px-4 py-6 sm:px-6 lg:ml-64 lg:px-8">
+      <main className={cx('px-4 py-6 transition-[margin] duration-200 sm:px-6 lg:px-8', collapsed ? 'lg:ml-16' : 'lg:ml-64')}>
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
     </div>
