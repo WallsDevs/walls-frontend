@@ -383,15 +383,15 @@ export default function Leads() {
             ))}
           </Select>
         ) : null}
-        <label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-sm text-slate-600">
-          <input
-            type="checkbox"
-            checked={overdueOnly}
-            onChange={(e) => setOverdueOnly(e.target.checked)}
-            className="size-4 accent-brand-500"
-          />
+        <button
+          onClick={() => setOverdueOnly((v) => !v)}
+          className={cx(
+            'whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
+            overdueOnly ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+          )}
+        >
           Solo vencidos
-        </label>
+        </button>
         {hasActiveFilters ? (
           <button onClick={clearFilters} className="text-sm font-medium text-slate-400 hover:text-slate-600">
             Limpiar filtros

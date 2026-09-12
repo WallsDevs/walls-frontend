@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -7,7 +7,6 @@ import {
   MessageCircle,
   MoreHorizontal,
   Phone,
-  Pencil,
   Plus,
   StickyNote,
   Trash2,
@@ -21,18 +20,17 @@ import {
   Badge,
   Button,
   Card,
-  ColorBadge,
   ConfirmDialog,
   ErrorNote,
   Field,
   Input,
   Modal,
   PageLoader,
-  PRIORITY_TONES,
   Select,
   Textarea,
+  inputCls,
+  cx,
 } from '../../components/ui'
-import { LeadModal } from './Leads'
 
 const ACTIVITY_ICONS: Record<string, any> = {
   call: Phone,
@@ -103,13 +101,47 @@ function ActivityModal({ open, onClose, leadId }: { open: boolean; onClose: () =
   )
 }
 
+/** Input sin chrome hasta que se pasa el mouse o se enfoca — para editar en línea sin que parezca un formulario. */
+function InlineInput({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={cx(
+        'w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 hover:border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100',
+        className,
+      )}
+    />
+  )
+}
+
+function InlineTextarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      {...props}
+      className={cx(
+        'min-h-16 w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-sm text-slate-700 placeholder:text-slate-400 hover:border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100',
+        className,
+      )}
+    />
+  )
+}
+
+function FieldRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="mb-0.5 px-2 text-xs text-slate-500">{label}</p>
+      {children}
+    </div>
+  )
+}
+
 export default function LeadDetail() {
   const { documentId = '' } = useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const [editing, setEditing] = useState(false)
   const [activityModal, setActivityModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [form, setForm] = useState<any>({})
 
   const { data: lead, isLoading, error } = useQuery({
     queryKey: ['lead', documentId],
@@ -129,10 +161,40 @@ export default function LeadDetail() {
     queryFn: () => rest.list('lead-sources', { sort: 'position:asc', pagination: { pageSize: 100 } }),
   })
 
-  const stageMutation = useMutation({
-    mutationFn: (stage: string) => rest.update('leads', documentId, { stage }),
+  useEffect(() => {
+    if (!lead) return
+    setForm({
+      companyName: lead.companyName || '',
+      contactName: lead.contactName || '',
+      contactEmail: lead.contactEmail || '',
+      contactPhone: lead.contactPhone || '',
+      website: lead.website || '',
+      linkedinUrl: lead.linkedinUrl || '',
+      country: lead.country || '',
+      ownerName: lead.ownerName || '',
+      notes: lead.notes || '',
+    })
+    // Solo al cambiar de lead: no queremos pisar lo que el usuario está escribiendo cuando refresca la query.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead?.documentId])
+
+  const set = (k: string, v: unknown) => setForm((f: any) => ({ ...f, [k]: v }))
+
+  const fieldMutation = useMutation({
+    mutationFn: (data: any) => rest.update('leads', documentId, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead', documentId] }),
   })
+
+  const saveField = (key: string) => {
+    if (!lead) return
+    const current = lead[key] || ''
+    if (form[key] === current) return
+    if (key === 'companyName' && !form[key]) {
+      set('companyName', lead.companyName)
+      return
+    }
+    fieldMutation.mutate({ [key]: form[key] || null })
+  }
 
   const convertMutation = useMutation({
     mutationFn: () => api(`/leads/${documentId}/convert-to-client`, { method: 'POST' }),
@@ -162,19 +224,27 @@ export default function LeadDetail() {
       </Link>
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight text-slate-900">{lead.companyName}</h1>
-            <Badge tone={PRIORITY_TONES[lead.urgency] || 'gray'}>{PRIORITY_LABELS[lead.urgency]}</Badge>
-          </div>
-          <p className="mt-1 text-sm text-slate-500">
-            {[lead.contactName, lead.contactEmail, lead.contactPhone].filter(Boolean).join(' · ') || 'Sin datos de contacto'}
-          </p>
-        </div>
+        <input
+          value={form.companyName ?? ''}
+          onChange={(e) => set('companyName', e.target.value)}
+          onBlur={() => saveField('companyName')}
+          className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 -mx-2 text-xl font-semibold tracking-tight text-slate-900 hover:border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
+        />
         <div className="flex flex-wrap items-center gap-2">
           <Select
+            value={lead.urgency || ''}
+            onChange={(e) => fieldMutation.mutate({ urgency: e.target.value })}
+            className="w-32"
+          >
+            {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </Select>
+          <Select
             value={lead.stage?.documentId || ''}
-            onChange={(e) => stageMutation.mutate(e.target.value)}
+            onChange={(e) => fieldMutation.mutate({ stage: e.target.value || null })}
             className="w-48"
           >
             {!lead.stage ? <option value="">Sin etapa</option> : null}
@@ -191,9 +261,6 @@ export default function LeadDetail() {
               Convertir a cliente
             </Button>
           ) : null}
-          <Button variant="secondary" icon={Pencil} onClick={() => setEditing(true)}>
-            Editar
-          </Button>
           <Button variant="danger" icon={Trash2} onClick={() => setDeleting(true)}>
             Eliminar
           </Button>
@@ -202,54 +269,71 @@ export default function LeadDetail() {
 
       {convertMutation.error ? <ErrorNote error={convertMutation.error} /> : null}
 
-      <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-        <Card className="p-5">
-          <p className="mb-3.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Datos del lead</p>
-          <div className="space-y-3.5 text-sm">
-            <div>
-              <p className="mb-0.5 text-xs text-slate-500">Origen</p>
-              {lead.source ? <ColorBadge color={lead.source.color}>{lead.source.name}</ColorBadge> : <p className="text-slate-400">Sin origen</p>}
+      <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
+        <Card className="p-4">
+          <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Datos del lead</p>
+          <div className="space-y-2.5">
+            <FieldRow label="Persona de contacto">
+              <InlineInput value={form.contactName ?? ''} onChange={(e) => set('contactName', e.target.value)} onBlur={() => saveField('contactName')} />
+            </FieldRow>
+            <FieldRow label="Correo">
+              <InlineInput
+                type="email"
+                value={form.contactEmail ?? ''}
+                onChange={(e) => set('contactEmail', e.target.value)}
+                onBlur={() => saveField('contactEmail')}
+              />
+            </FieldRow>
+            <FieldRow label="Teléfono">
+              <InlineInput value={form.contactPhone ?? ''} onChange={(e) => set('contactPhone', e.target.value)} onBlur={() => saveField('contactPhone')} />
+            </FieldRow>
+            <FieldRow label="Sitio web">
+              <InlineInput value={form.website ?? ''} onChange={(e) => set('website', e.target.value)} onBlur={() => saveField('website')} placeholder="https://…" />
+            </FieldRow>
+            <FieldRow label="LinkedIn">
+              <InlineInput
+                value={form.linkedinUrl ?? ''}
+                onChange={(e) => set('linkedinUrl', e.target.value)}
+                onBlur={() => saveField('linkedinUrl')}
+                placeholder="https://linkedin.com/in/…"
+              />
+            </FieldRow>
+            <FieldRow label="País">
+              <InlineInput value={form.country ?? ''} onChange={(e) => set('country', e.target.value)} onBlur={() => saveField('country')} />
+            </FieldRow>
+            <FieldRow label="Origen">
+              <select
+                value={lead.source?.documentId || ''}
+                onChange={(e) => fieldMutation.mutate({ source: e.target.value || null })}
+                className={cx(inputCls, 'border-transparent bg-transparent hover:border-slate-200')}
+              >
+                <option value="">Sin origen</option>
+                {(sources || []).map((s: any) => (
+                  <option key={s.documentId} value={s.documentId}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+            <FieldRow label="Dueño del lead">
+              <InlineInput value={form.ownerName ?? ''} onChange={(e) => set('ownerName', e.target.value)} onBlur={() => saveField('ownerName')} placeholder="Quién lo está trabajando" />
+            </FieldRow>
+            <FieldRow label="Próximo seguimiento">
+              <InlineInput
+                type="date"
+                defaultValue={lead.nextFollowUpDate || ''}
+                key={lead.nextFollowUpDate}
+                onChange={(e) => fieldMutation.mutate({ nextFollowUpDate: e.target.value || null })}
+              />
+            </FieldRow>
+            <FieldRow label="Última actividad">
+              <p className="px-2 py-1 text-sm text-slate-500">{lead.lastActivityAt ? fmtDate(lead.lastActivityAt) : '—'}</p>
+            </FieldRow>
+            <div className="border-t border-slate-100 pt-2.5">
+              <FieldRow label="Notas">
+                <InlineTextarea value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value)} onBlur={() => saveField('notes')} placeholder="Sin notas" />
+              </FieldRow>
             </div>
-            {lead.country ? (
-              <div>
-                <p className="mb-0.5 text-xs text-slate-500">País</p>
-                <p className="text-slate-700">{lead.country}</p>
-              </div>
-            ) : null}
-            {lead.website ? (
-              <div>
-                <p className="mb-0.5 text-xs text-slate-500">Sitio web</p>
-                <a href={lead.website} target="_blank" rel="noreferrer" className="break-all text-brand-600 hover:text-brand-700">
-                  {lead.website}
-                </a>
-              </div>
-            ) : null}
-            {lead.linkedinUrl ? (
-              <div>
-                <p className="mb-0.5 text-xs text-slate-500">LinkedIn</p>
-                <a href={lead.linkedinUrl} target="_blank" rel="noreferrer" className="break-all text-brand-600 hover:text-brand-700">
-                  {lead.linkedinUrl}
-                </a>
-              </div>
-            ) : null}
-            <div>
-              <p className="mb-0.5 text-xs text-slate-500">Dueño del lead</p>
-              <p className="text-slate-700">{lead.ownerName || '—'}</p>
-            </div>
-            <div>
-              <p className="mb-0.5 text-xs text-slate-500">Próximo seguimiento</p>
-              <p className="text-slate-700">{lead.nextFollowUpDate ? fmtDate(lead.nextFollowUpDate) : 'sin programar'}</p>
-            </div>
-            <div>
-              <p className="mb-0.5 text-xs text-slate-500">Última actividad</p>
-              <p className="text-slate-700">{lead.lastActivityAt ? fmtDate(lead.lastActivityAt) : '—'}</p>
-            </div>
-            {lead.notes ? (
-              <div className="border-t border-slate-100 pt-3.5">
-                <p className="mb-0.5 text-xs text-slate-500">Notas</p>
-                <p className="whitespace-pre-line text-slate-600">{lead.notes}</p>
-              </div>
-            ) : null}
           </div>
         </Card>
 
@@ -290,7 +374,6 @@ export default function LeadDetail() {
         </Card>
       </div>
 
-      <LeadModal open={editing} onClose={() => setEditing(false)} lead={lead} stages={stages || []} sources={sources || []} />
       <ActivityModal open={activityModal} onClose={() => setActivityModal(false)} leadId={documentId} />
       <ConfirmDialog
         open={deleting}
