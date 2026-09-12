@@ -237,30 +237,38 @@ export default function LeadDetail() {
           onBlur={() => saveField('companyName')}
           className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 -mx-2 text-xl font-semibold tracking-tight text-slate-900 hover:border-slate-200 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
         />
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={lead.urgency || ''}
-            onChange={(e) => fieldMutation.mutate({ urgency: e.target.value })}
-            className="w-32"
-          >
-            {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </Select>
-          <Select
-            value={lead.stage?.documentId || ''}
-            onChange={(e) => stageChange.request(lead, (stages || []).find((s: any) => s.documentId === e.target.value))}
-            className="w-48"
-            title={lead.stage?.description || undefined}
-          >
-            {(stages || []).map((s: any) => (
-              <option key={s.documentId} value={s.documentId}>
-                {s.name}
-              </option>
-            ))}
-          </Select>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Urgencia</span>
+            <Select
+              value={lead.urgency || ''}
+              onChange={(e) => fieldMutation.mutate({ urgency: e.target.value })}
+              className="py-1.5"
+              style={{ width: '8.5rem' }}
+            >
+              {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Etapa</span>
+            <Select
+              value={lead.stage?.documentId || ''}
+              onChange={(e) => stageChange.request(lead, (stages || []).find((s: any) => s.documentId === e.target.value))}
+              className="py-1.5"
+              style={{ width: '12rem' }}
+              title={lead.stage?.description || undefined}
+            >
+              {(stages || []).map((s: any) => (
+                <option key={s.documentId} value={s.documentId}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </label>
           {lead.convertedToClient ? (
             <Badge tone="green">Convertido a cliente</Badge>
           ) : canConvert ? (
@@ -268,9 +276,6 @@ export default function LeadDetail() {
               Convertir a cliente
             </Button>
           ) : null}
-          <Button variant="danger" icon={Trash2} onClick={() => setDeleting(true)}>
-            Eliminar
-          </Button>
         </div>
       </div>
 
@@ -381,6 +386,15 @@ export default function LeadDetail() {
                 <InlineTextarea value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value)} onBlur={() => saveField('notes')} placeholder="Sin notas" />
               </FieldRow>
             </div>
+          </div>
+          <div className="mt-4 border-t border-slate-100 pt-3">
+            <button
+              onClick={() => setDeleting(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+            >
+              <Trash2 size={13} />
+              Eliminar este lead
+            </button>
           </div>
         </Card>
 
