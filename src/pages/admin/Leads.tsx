@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { Globe, Link2, LayoutGrid, List, Settings2, Tags, Target, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Globe, Link2, LayoutGrid, List, Settings2, Tags, Target, Plus, Trash2 } from 'lucide-react'
 import { rest } from '../../lib/api'
 import { todayISO } from '../../lib/format'
 import { useAuth } from '../../auth/AuthContext'
 import { PRIORITY_LABELS } from '../../lib/labels'
+import { defaultStage } from '../../lib/leadRules'
+import { useStageChange } from '../../components/StageChangeDialog'
 import {
   Badge,
   Button,
@@ -35,6 +37,19 @@ const URGENCY_STRIPE: Record<string, string> = {
   urgent: '#dc2626',
 }
 
+const WEEK_KINDS: Array<{ kind: string; label: string }> = [
+  { kind: 'mensaje_enviado', label: 'Mensajes enviados' },
+  { kind: 'respuesta_recibida', label: 'Respuestas recibidas' },
+  { kind: 'llamada', label: 'Llamadas' },
+  { kind: 'propuesta_enviada', label: 'Propuestas enviadas' },
+]
+
+const daysAgoISO = (days: number) => {
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  return d.toISOString().slice(0, 10)
+}
+
 const emptyForm = () => ({
   companyName: '',
   contactName: '',
@@ -57,14 +72,12 @@ export function LeadModal({
   lead,
   stages,
   sources,
-  defaultStage,
 }: {
   open: boolean
   onClose: () => void
   lead?: any | null
   stages: any[]
   sources: any[]
-  defaultStage?: string
 }) {
   const qc = useQueryClient()
   const { auth } = useAuth()
@@ -93,9 +106,9 @@ export function LeadModal({
             notes: lead.notes || '',
             stage: lead.stage?.documentId || '',
           }
-        : { ...emptyForm(), ownerName: myName, stage: defaultStage || stages[0]?.documentId || '' },
+        : { ...emptyForm(), ownerName: myName, stage: defaultStage(stages)?.documentId || '' },
     )
-  }, [open, lead, defaultStage])
+  }, [open, lead])
 
   const set = (k: string, v: unknown) => setForm((f: any) => ({ ...f, [k]: v }))
 
@@ -114,7 +127,7 @@ export function LeadModal({
         ownerName: form.ownerName || null,
         nextFollowUpDate: form.nextFollowUpDate || null,
         notes: form.notes || null,
-        stage: form.stage || null,
+        stage: form.stage || defaultStage(stages)?.documentId || null,
       }
       return lead ? rest.update('leads', lead.documentId, data) : rest.create('leads', data)
     },
@@ -187,9 +200,8 @@ export function LeadModal({
             </Select>
           </Field>
         </div>
-        <Field label="Etapa">
+        <Field label="Etapa" hint="Los leads nuevos entran en Por revisar">
           <Select value={form.stage} onChange={(e) => set('stage', e.target.value)}>
-            {!form.stage ? <option value="">Sin etapa</option> : null}
             {stages.map((s: any) => (
               <option key={s.documentId} value={s.documentId}>
                 {s.name}
@@ -201,7 +213,7 @@ export function LeadModal({
           <Field label="Dueño del lead" hint="Quién lo está trabajando">
             <Input value={form.ownerName} onChange={(e) => set('ownerName', e.target.value)} />
           </Field>
-          <Field label="Próximo seguimiento">
+          <Field label="Próximo paso">
             <Input type="date" value={form.nextFollowUpDate} onChange={(e) => set('nextFollowUpDate', e.target.value)} />
           </Field>
         </div>
@@ -226,11 +238,11 @@ export default function Leads() {
   const [urgencyFilter, setUrgencyFilter] = useState('')
   const [countryFilter, setCountryFilter] = useState('')
   const [overdueOnly, setOverdueOnly] = useState(false)
-  const [showUnassigned, setShowUnassigned] = useState(true)
-  const [modal, setModal] = useState<{ open: boolean; lead?: any; defaultStage?: string }>({ open: false })
+  const [modal, setModal] = useState<{ open: boolean; lead?: any }>({ open: false })
   const [deleting, setDeleting] = useState<any | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
   const { data: leads, isLoading } = useQuery({
     queryKey: ['leads'],
@@ -242,19 +254,6 @@ export default function Leads() {
       }),
   })
 
-  const stageMutation = useMutation({
-    mutationFn: ({ id, stage }: { id: string; stage: string | null }) => rest.update('leads', id, { stage }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['leads'] }),
-  })
-
-  const removeMutation = useMutation({
-    mutationFn: (id: string) => rest.remove('leads', id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['leads'] })
-      setDeleting(null)
-    },
-  })
-
   const { data: stages, isLoading: stagesLoading } = useQuery({
     queryKey: ['pipeline-stages'],
     queryFn: () => rest.list('pipeline-stages', { sort: 'position:asc', pagination: { pageSize: 100 } }),
@@ -263,6 +262,27 @@ export default function Leads() {
   const { data: sources, isLoading: sourcesLoading } = useQuery({
     queryKey: ['lead-sources'],
     queryFn: () => rest.list('lead-sources', { sort: 'position:asc', pagination: { pageSize: 100 } }),
+  })
+
+  const weekSince = daysAgoISO(7)
+  const { data: weekActivities } = useQuery({
+    queryKey: ['lead-activities', 'week', weekSince],
+    queryFn: () =>
+      rest.list('lead-activities', {
+        filters: { date: { $gte: weekSince } },
+        fields: ['kind', 'date'],
+        pagination: { pageSize: 500 },
+      }),
+  })
+
+  const stageChange = useStageChange()
+
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => rest.remove('leads', id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['leads'] })
+      setDeleting(null)
+    },
   })
 
   const today = todayISO()
@@ -296,12 +316,19 @@ export default function Leads() {
     setCountryFilter('')
     setOverdueOnly(false)
   }
-  // Independiente de los filtros: si existe al menos un lead sin etapa en todo el dataset, la columna
-  // se mantiene visible (con "Vacío" si el filtro no deja ver ninguno), en vez de aparecer y desaparecer.
-  const hasOrphans = (leads || []).some((l: any) => !l.stage)
-  const boardColumns = hasOrphans && showUnassigned
-    ? [...(stages || []), { documentId: '__none__', name: 'Sin etapa', color: '#cbd5e1', __orphan: true }]
-    : stages || []
+
+  const boardColumns: any[] = stages || []
+  const entryStageId = defaultStage(boardColumns)?.documentId
+  // Las etapas finales (ganado / cerrado) empiezan colapsadas para dejar a la vista las de trabajo.
+  const isCollapsed = (s: any) => collapsed[s.documentId] ?? s.outcome !== 'open'
+  const toggleCollapsed = (s: any) => setCollapsed((c) => ({ ...c, [s.documentId]: !isCollapsed(s) }))
+
+  const weekCounts = useMemo(() => {
+    const byKind: Record<string, number> = {}
+    for (const a of weekActivities || []) byKind[a.kind] = (byKind[a.kind] || 0) + 1
+    const won = (leads || []).filter((l: any) => l.wonAt && String(l.wonAt).slice(0, 10) >= weekSince).length
+    return { byKind, won }
+  }, [weekActivities, leads, weekSince])
 
   if (isLoading || stagesLoading || sourcesLoading) return <PageLoader />
 
@@ -353,7 +380,7 @@ export default function Leads() {
         {view === 'list' ? (
           <Select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className="w-full sm:w-44">
             <option value="">Todas las etapas</option>
-            {(stages || []).map((s: any) => (
+            {boardColumns.map((s: any) => (
               <option key={s.documentId} value={s.documentId}>
                 {s.name}
               </option>
@@ -391,7 +418,7 @@ export default function Leads() {
           disabled={overdueCount === 0}
           title={
             overdueCount === 0
-              ? 'No hay leads vencidos: para que un lead aparezca aquí necesita una fecha de "Próximo seguimiento" ya pasada'
+              ? 'No hay leads vencidos: para que un lead aparezca aquí necesita una fecha de "Próximo paso" ya pasada'
               : undefined
           }
           className={cx(
@@ -401,28 +428,6 @@ export default function Leads() {
         >
           Solo vencidos
         </button>
-        {view === 'board' && hasOrphans ? (
-          <label className="flex cursor-pointer select-none items-center gap-2 whitespace-nowrap text-sm text-slate-600">
-            <span
-              className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
-              style={{ background: showUnassigned ? '#2a78d6' : '#cbd5e1' }}
-            >
-              <input
-                type="checkbox"
-                checked={showUnassigned}
-                onChange={(e) => setShowUnassigned(e.target.checked)}
-                className="sr-only"
-              />
-              <span
-                className={cx(
-                  'inline-block size-4 transform rounded-full bg-white shadow transition-transform',
-                  showUnassigned ? 'translate-x-4' : 'translate-x-1',
-                )}
-              />
-            </span>
-            Ver sin etapa
-          </label>
-        ) : null}
         {hasActiveFilters ? (
           <button onClick={clearFilters} className="text-sm font-medium text-slate-400 hover:text-slate-600">
             Limpiar filtros
@@ -438,7 +443,27 @@ export default function Leads() {
         </div>
       </div>
 
-      {!stages?.length ? (
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {WEEK_KINDS.map((k) => (
+          <div key={k.kind} className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{k.label}</p>
+            <p className="text-lg font-semibold text-slate-900">{weekCounts.byKind[k.kind] || 0}</p>
+          </div>
+        ))}
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 shadow-sm">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-600">Ganados</p>
+          <p className="text-lg font-semibold text-emerald-700">{weekCounts.won}</p>
+        </div>
+        <p className="col-span-2 -mt-1 text-[11px] text-slate-400 sm:col-span-5">Esta semana · últimos 7 días</p>
+      </div>
+
+      {stageChange.error && !stageChange.dialogOpen ? (
+        <div className="mb-3">
+          <ErrorNote error={new Error(stageChange.error)} />
+        </div>
+      ) : null}
+
+      {!boardColumns.length ? (
         <EmptyState
           icon={Target}
           title="Todavía no hay etapas de pipeline"
@@ -469,7 +494,7 @@ export default function Leads() {
               <Th>Urgencia</Th>
               <Th>Etapa</Th>
               <Th>Dueño</Th>
-              <Th>Seguimiento</Th>
+              <Th>Próximo paso</Th>
               <Th />
             </tr>
           </thead>
@@ -520,10 +545,13 @@ export default function Leads() {
           </tbody>
         </TableWrap>
       ) : (
-        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${boardColumns.length}, minmax(0, 1fr))` }}>
+        <div
+          className="grid gap-3"
+          style={{ gridTemplateColumns: boardColumns.map((s: any) => (isCollapsed(s) ? '3rem' : 'minmax(0, 1fr)')).join(' ') }}
+        >
           {boardColumns.map((s: any) => {
-            const list = s.__orphan ? filtered.filter((l: any) => !l.stage) : filtered.filter((l: any) => l.stage?.documentId === s.documentId)
-            const dropTargetStage = s.__orphan ? null : s.documentId
+            const list = filtered.filter((l: any) => (l.stage?.documentId ?? entryStageId) === s.documentId)
+            const columnCollapsed = isCollapsed(s)
             return (
               <div
                 key={s.documentId}
@@ -539,122 +567,147 @@ export default function Leads() {
                   setDraggingId(null)
                   if (!id) return
                   const lead = (leads || []).find((l: any) => l.documentId === id)
-                  if (lead?.stage?.documentId === dropTargetStage) return
-                  stageMutation.mutate({ id, stage: dropTargetStage })
+                  if (lead) stageChange.request(lead, s)
                 }}
                 className={cx(
-                  'rounded-xl bg-slate-200/50 p-2.5 transition-colors',
+                  'rounded-xl bg-slate-200/50 transition-colors',
+                  columnCollapsed ? 'flex flex-col items-center gap-2 px-1 py-2.5' : 'p-2.5',
                   dragOverStage === s.documentId && 'bg-brand-100/60 ring-2 ring-brand-300',
                 )}
               >
-                <div className="mb-2 flex items-center justify-between px-1">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {columnCollapsed ? (
+                  <>
+                    <button
+                      onClick={() => toggleCollapsed(s)}
+                      title={`Expandir ${s.name}`}
+                      className="rounded-md p-1 text-slate-400 hover:bg-white hover:text-slate-700"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span className="rounded-full bg-white px-1.5 text-xs text-slate-500">{list.length}</span>
                     <span className="inline-block size-2 rounded-full" style={{ background: s.color || '#94a3b8' }} />
-                    {s.name}
-                  </span>
-                  <span className="rounded-full bg-white px-1.5 text-xs text-slate-500">{list.length}</span>
-                </div>
-                {s.__orphan ? (
-                  <p className="mb-2 px-1 text-xs text-slate-400">Se quedaron sin etapa (se borró la que tenían). Arrástralos a una columna.</p>
-                ) : null}
-                <div className="space-y-2">
-                  {list.map((l: any) => {
-                    const overdue = isOverdue(l)
-                    return (
-                      <div
-                        key={l.documentId}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('text/plain', l.documentId)
-                          e.dataTransfer.effectAllowed = 'move'
-                          setDraggingId(l.documentId)
-                        }}
-                        onDragEnd={() => {
-                          setDraggingId(null)
-                          setDragOverStage(null)
-                        }}
-                        onClick={() => navigate(`/leads/${l.documentId}`)}
-                        className={cx(
-                          'group relative w-full cursor-grab overflow-hidden rounded-lg border bg-white py-3 pl-3.5 pr-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
-                          overdue ? 'border-red-200' : 'border-slate-200',
-                          draggingId === l.documentId && 'opacity-40',
-                        )}
+                    <span
+                      title={s.description || undefined}
+                      className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-slate-500 [writing-mode:vertical-rl] rotate-180"
+                    >
+                      {s.name}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div className="mb-2 flex items-center justify-between px-1">
+                      <span
+                        title={s.description || undefined}
+                        className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
                       >
-                        {l.urgency ? (
-                          <span className="absolute inset-y-0 left-0 w-1" style={{ background: URGENCY_STRIPE[l.urgency] || '#94a3b8' }} />
-                        ) : null}
+                        <span className="inline-block size-2 rounded-full" style={{ background: s.color || '#94a3b8' }} />
+                        {s.name}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="rounded-full bg-white px-1.5 text-xs text-slate-500">{list.length}</span>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setDeleting(l)
-                          }}
-                          className="absolute right-2 top-2 rounded-lg p-1 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                          onClick={() => toggleCollapsed(s)}
+                          title={`Contraer ${s.name}`}
+                          className="rounded-md p-0.5 text-slate-400 hover:bg-white hover:text-slate-700"
                         >
-                          <Trash2 size={13} />
+                          <ChevronRight size={14} />
                         </button>
-                        <div className="flex items-start justify-between gap-2 pr-5">
-                          <p className="truncate text-sm font-medium text-slate-900">{l.companyName}</p>
-                          {l.urgency ? <Badge tone={PRIORITY_TONES[l.urgency] || 'gray'}>{PRIORITY_LABELS[l.urgency]}</Badge> : null}
-                        </div>
-                        {l.contactName || l.country ? (
-                          <p className="mt-0.5 truncate text-xs text-slate-500">
-                            {[l.contactName, l.country].filter(Boolean).join(' · ')}
-                          </p>
-                        ) : null}
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          {l.source ? <ColorBadge color={l.source.color}>{l.source.name}</ColorBadge> : null}
-                          {l.website ? (
-                            <span title={l.website} className="flex size-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                              <Globe size={11} />
-                            </span>
-                          ) : null}
-                          {l.linkedinUrl ? (
-                            <span title={l.linkedinUrl} className="flex size-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                              <Link2 size={11} />
-                            </span>
-                          ) : null}
-                          {l.ownerName ? (
-                            <span
-                              title={l.ownerName}
-                              className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {list.map((l: any) => {
+                        const overdue = isOverdue(l)
+                        return (
+                          <div
+                            key={l.documentId}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', l.documentId)
+                              e.dataTransfer.effectAllowed = 'move'
+                              setDraggingId(l.documentId)
+                            }}
+                            onDragEnd={() => {
+                              setDraggingId(null)
+                              setDragOverStage(null)
+                            }}
+                            onClick={() => navigate(`/leads/${l.documentId}`)}
+                            className={cx(
+                              'group relative w-full cursor-grab overflow-hidden rounded-lg border bg-white py-3 pl-3.5 pr-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
+                              overdue ? 'border-red-200' : 'border-slate-200',
+                              draggingId === l.documentId && 'opacity-40',
+                            )}
+                          >
+                            {l.urgency ? (
+                              <span className="absolute inset-y-0 left-0 w-1" style={{ background: URGENCY_STRIPE[l.urgency] || '#94a3b8' }} />
+                            ) : null}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeleting(l)
+                              }}
+                              className="absolute right-2 top-2 rounded-lg p-1 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
                             >
-                              {l.ownerName
-                                .split(' ')
-                                .filter(Boolean)
-                                .slice(0, 2)
-                                .map((p: string) => p[0])
-                                .join('')
-                                .toUpperCase()}
-                            </span>
-                          ) : null}
-                        </div>
-                        {overdue ? (
-                          <div className="mt-1.5 flex items-center justify-between">
-                            <span className="text-xs text-red-600">Venció {l.nextFollowUpDate}</span>
-                            <Badge tone="red">Vencido</Badge>
+                              <Trash2 size={13} />
+                            </button>
+                            <div className="flex items-start justify-between gap-2 pr-5">
+                              <p className="truncate text-sm font-medium text-slate-900">{l.companyName}</p>
+                              {l.urgency ? <Badge tone={PRIORITY_TONES[l.urgency] || 'gray'}>{PRIORITY_LABELS[l.urgency]}</Badge> : null}
+                            </div>
+                            {l.contactName || l.country ? (
+                              <p className="mt-0.5 truncate text-xs text-slate-500">
+                                {[l.contactName, l.country].filter(Boolean).join(' · ')}
+                              </p>
+                            ) : null}
+                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                              {l.source ? <ColorBadge color={l.source.color}>{l.source.name}</ColorBadge> : null}
+                              {l.website ? (
+                                <span title={l.website} className="flex size-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                                  <Globe size={11} />
+                                </span>
+                              ) : null}
+                              {l.linkedinUrl ? (
+                                <span title={l.linkedinUrl} className="flex size-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                                  <Link2 size={11} />
+                                </span>
+                              ) : null}
+                              {l.ownerName ? (
+                                <span
+                                  title={l.ownerName}
+                                  className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
+                                >
+                                  {l.ownerName
+                                    .split(' ')
+                                    .filter(Boolean)
+                                    .slice(0, 2)
+                                    .map((p: string) => p[0])
+                                    .join('')
+                                    .toUpperCase()}
+                                </span>
+                              ) : null}
+                            </div>
+                            {overdue ? (
+                              <div className="mt-1.5 flex items-center justify-between">
+                                <span className="text-xs text-red-600">Venció {l.nextFollowUpDate}</span>
+                                <Badge tone="red">Vencido</Badge>
+                              </div>
+                            ) : l.nextFollowUpDate ? (
+                              <p className="mt-1.5 text-xs text-slate-400">Próximo paso {l.nextFollowUpDate}</p>
+                            ) : null}
                           </div>
-                        ) : l.nextFollowUpDate ? (
-                          <p className="mt-1.5 text-xs text-slate-400">Seguimiento {l.nextFollowUpDate}</p>
-                        ) : null}
-                      </div>
-                    )
-                  })}
-                  {!list.length && <p className="px-1 py-3 text-center text-xs text-slate-400">Vacío</p>}
-                </div>
+                        )
+                      })}
+                      {!list.length && <p className="px-1 py-3 text-center text-xs text-slate-400">Vacío</p>}
+                    </div>
+                  </>
+                )}
               </div>
             )
           })}
         </div>
       )}
 
-      <LeadModal
-        open={modal.open}
-        onClose={() => setModal({ open: false })}
-        lead={modal.lead}
-        stages={stages || []}
-        sources={sources || []}
-        defaultStage={modal.defaultStage}
-      />
+      {stageChange.dialog}
+      <LeadModal open={modal.open} onClose={() => setModal({ open: false })} lead={modal.lead} stages={boardColumns} sources={sources || []} />
       <ConfirmDialog
         open={!!deleting}
         onClose={() => setDeleting(null)}

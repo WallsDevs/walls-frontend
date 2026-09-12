@@ -127,13 +127,21 @@ export default function PipelineStages() {
         </Button>
       </div>
       <p className="mb-5 text-sm text-slate-500">
-        Este es tu proceso de ventas: renómbralo, reordénalo o bórralo para que calce con tu estrategia real. Las etapas
-        marcadas "Ganada" habilitan el botón "Convertir a cliente" en esos leads.
+        Las seis etapas del proceso comercial vienen por defecto (de "Por revisar" a "Ganado" / "Cerrado sin venta") y
+        puedes renombrarlas, reordenarlas o agregar otras. "Por revisar" no se puede borrar: es donde entra todo lead
+        nuevo y adonde vuelven los leads de una etapa que elimines. Las etapas marcadas "Ganada" habilitan "Convertir a
+        cliente".
       </p>
+
+      {removeMutation.error ? (
+        <div className="mb-3">
+          <ErrorNote error={removeMutation.error} />
+        </div>
+      ) : null}
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {list.map((s: any, i: number) => (
-          <div key={s.documentId} className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0">
+          <div key={s.documentId} title={s.description || undefined} className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0">
             <div className="flex flex-col gap-0.5 text-slate-400">
               <button onClick={() => swap(i, i - 1)} disabled={i === 0} className="rounded p-0.5 hover:bg-slate-100 disabled:opacity-30">
                 <ArrowUp size={13} />
@@ -149,15 +157,24 @@ export default function PipelineStages() {
               className="size-6 shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-0"
               title="Color de la etapa"
             />
-            <input
-              value={s.name}
-              onChange={(e) => updateMutation.mutate({ id: s.documentId, data: { name: e.target.value } })}
-              className="flex-1 rounded-lg border border-transparent px-2 py-1 text-sm font-medium text-slate-900 hover:border-slate-200 focus:border-brand-500 focus:outline-none"
-            />
+            <div className="min-w-0 flex-1">
+              <input
+                value={s.name}
+                onChange={(e) => updateMutation.mutate({ id: s.documentId, data: { name: e.target.value } })}
+                className="w-full rounded-lg border border-transparent px-2 py-1 text-sm font-medium text-slate-900 hover:border-slate-200 focus:border-brand-500 focus:outline-none"
+              />
+              <input
+                value={s.description || ''}
+                onChange={(e) => updateMutation.mutate({ id: s.documentId, data: { description: e.target.value } })}
+                placeholder="Descripción (se muestra como ayuda)"
+                className="w-full rounded-lg border border-transparent px-2 py-0.5 text-xs text-slate-500 placeholder:text-slate-300 hover:border-slate-200 focus:border-brand-500 focus:outline-none"
+              />
+            </div>
             <Select
               value={s.outcome}
               onChange={(e) => updateMutation.mutate({ id: s.documentId, data: { outcome: e.target.value } })}
-              className="w-32 py-1 text-xs"
+              className="shrink-0 py-1 text-xs"
+              style={{ width: '8.5rem' }}
             >
               {Object.entries(PIPELINE_OUTCOME_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -166,9 +183,15 @@ export default function PipelineStages() {
               ))}
             </Select>
             <Badge tone={PIPELINE_OUTCOME_TONES[s.outcome]}>{PIPELINE_OUTCOME_LABELS[s.outcome]}</Badge>
-            <button onClick={() => setDeleting(s)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">
-              <Trash2 size={15} />
-            </button>
+            {s.slug === 'por_revisar' ? (
+              <span title="Punto de entrada: no se puede eliminar" className="shrink-0">
+                <Badge tone="blue">Entrada</Badge>
+              </span>
+            ) : (
+              <button onClick={() => setDeleting(s)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">
+                <Trash2 size={15} />
+              </button>
+            )}
           </div>
         ))}
         {!list.length ? <p className="px-4 py-8 text-center text-sm text-slate-400">Todavía no hay etapas.</p> : null}
@@ -181,7 +204,7 @@ export default function PipelineStages() {
         onConfirm={() => removeMutation.mutate(deleting.documentId)}
         loading={removeMutation.isPending}
         title="Eliminar etapa"
-        message={`¿Eliminar "${deleting?.name}"? Los leads en esta etapa quedarán sin etapa asignada.`}
+        message={`¿Eliminar "${deleting?.name}"? Sus leads pasarán a "Por revisar".`}
       />
     </div>
   )

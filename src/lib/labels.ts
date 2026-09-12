@@ -71,13 +71,15 @@ export const MILESTONE_STATUS_LABELS: Record<string, string> = {
 }
 
 export const LEAD_ACTIVITY_KIND_LABELS: Record<string, string> = {
-  call: 'Llamada',
-  email: 'Correo',
-  meeting: 'Reunión',
-  whatsapp: 'WhatsApp',
-  note: 'Nota',
-  other: 'Otro',
+  mensaje_enviado: 'Mensaje enviado',
+  seguimiento: 'Seguimiento',
+  respuesta_recibida: 'Respuesta recibida',
+  llamada: 'Llamada',
+  propuesta_enviada: 'Propuesta enviada',
+  nota: 'Nota',
 }
+
+export { CLOSE_REASON_LABELS } from './leadRules'
 
 export const PIPELINE_OUTCOME_LABELS: Record<string, string> = {
   open: 'Abierta',

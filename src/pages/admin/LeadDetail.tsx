@@ -1,21 +1,11 @@
 import { useEffect, useState, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import {
-  ArrowLeft,
-  Mail,
-  MessageCircle,
-  MoreHorizontal,
-  Phone,
-  Plus,
-  StickyNote,
-  Trash2,
-  UserCheck,
-  Users,
-} from 'lucide-react'
+import { ArrowLeft, FileText, MailOpen, MoreHorizontal, PhoneCall, Plus, Repeat, Send, StickyNote, Trash2, UserCheck } from 'lucide-react'
 import { api, rest } from '../../lib/api'
 import { fmtDate } from '../../lib/format'
-import { LEAD_ACTIVITY_KIND_LABELS, PRIORITY_LABELS } from '../../lib/labels'
+import { CLOSE_REASON_LABELS, LEAD_ACTIVITY_KIND_LABELS, PRIORITY_LABELS } from '../../lib/labels'
+import { useStageChange } from '../../components/StageChangeDialog'
 import {
   Badge,
   Button,
@@ -33,15 +23,15 @@ import {
 } from '../../components/ui'
 
 const ACTIVITY_ICONS: Record<string, any> = {
-  call: Phone,
-  email: Mail,
-  meeting: Users,
-  whatsapp: MessageCircle,
-  note: StickyNote,
-  other: MoreHorizontal,
+  mensaje_enviado: Send,
+  seguimiento: Repeat,
+  respuesta_recibida: MailOpen,
+  llamada: PhoneCall,
+  propuesta_enviada: FileText,
+  nota: StickyNote,
 }
 
-const emptyActivity = () => ({ kind: 'call', description: '', date: new Date().toISOString().slice(0, 10) })
+const emptyActivity = () => ({ kind: 'nota', description: '', date: new Date().toISOString().slice(0, 10) })
 
 function ActivityModal({ open, onClose, leadId }: { open: boolean; onClose: () => void; leadId: string }) {
   const qc = useQueryClient()
@@ -54,9 +44,11 @@ function ActivityModal({ open, onClose, leadId }: { open: boolean; onClose: () =
   const set = (k: string, v: unknown) => setForm((f: any) => ({ ...f, [k]: v }))
 
   const mutation = useMutation({
-    mutationFn: () => rest.create('lead-activities', { ...form, lead: leadId }),
+    mutationFn: () =>
+      rest.create('lead-activities', { kind: form.kind, date: form.date, description: form.description || null, lead: leadId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lead', leadId] })
+      qc.invalidateQueries({ queryKey: ['lead-activities'] })
       onClose()
     },
   })
@@ -71,7 +63,7 @@ function ActivityModal({ open, onClose, leadId }: { open: boolean; onClose: () =
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={() => mutation.mutate()} loading={mutation.isPending} disabled={!form.description}>
+          <Button onClick={() => mutation.mutate()} loading={mutation.isPending} disabled={!form.kind || !form.date}>
             Agregar
           </Button>
         </>
@@ -79,7 +71,7 @@ function ActivityModal({ open, onClose, leadId }: { open: boolean; onClose: () =
     >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Tipo">
+          <Field label="Tipo *">
             <Select value={form.kind} onChange={(e) => set('kind', e.target.value)}>
               {Object.entries(LEAD_ACTIVITY_KIND_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>
@@ -88,11 +80,11 @@ function ActivityModal({ open, onClose, leadId }: { open: boolean; onClose: () =
               ))}
             </Select>
           </Field>
-          <Field label="Fecha">
+          <Field label="Fecha *">
             <Input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} />
           </Field>
         </div>
-        <Field label="Descripción *">
+        <Field label="Nota" hint="Opcional">
           <Textarea value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Qué pasó en este contacto…" />
         </Field>
         {mutation.error ? <ErrorNote error={mutation.error} /> : null}
@@ -126,14 +118,17 @@ function InlineTextarea({ className, ...props }: TextareaHTMLAttributes<HTMLText
   )
 }
 
-function FieldRow({ label, children }: { label: string; children: ReactNode }) {
+function FieldRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <div>
       <p className="mb-0.5 px-2 text-xs text-slate-500">{label}</p>
       {children}
+      {hint ? <p className="px-2 text-[11px] text-slate-400">{hint}</p> : null}
     </div>
   )
 }
+
+const inlineSelectCls = cx(inputCls, 'border-transparent bg-transparent hover:border-slate-200')
 
 export default function LeadDetail() {
   const { documentId = '' } = useParams()
@@ -173,6 +168,7 @@ export default function LeadDetail() {
       country: lead.country || '',
       ownerName: lead.ownerName || '',
       notes: lead.notes || '',
+      qualificationScore: lead.qualificationScore ?? '',
     })
     // Solo al cambiar de lead: no queremos pisar lo que el usuario está escribiendo cuando refresca la query.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -195,6 +191,17 @@ export default function LeadDetail() {
     }
     fieldMutation.mutate({ [key]: form[key] || null })
   }
+
+  // Aparte de saveField porque 0 es un puntaje válido y `|| null` lo borraría.
+  const saveScore = () => {
+    if (!lead) return
+    const raw = form.qualificationScore
+    const next = raw === '' || raw === null || raw === undefined ? null : Number(raw)
+    if (next === (lead.qualificationScore ?? null)) return
+    fieldMutation.mutate({ qualificationScore: next })
+  }
+
+  const stageChange = useStageChange()
 
   const convertMutation = useMutation({
     mutationFn: () => api(`/leads/${documentId}/convert-to-client`, { method: 'POST' }),
@@ -223,7 +230,7 @@ export default function LeadDetail() {
         <ArrowLeft size={15} /> Leads
       </Link>
 
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <input
           value={form.companyName ?? ''}
           onChange={(e) => set('companyName', e.target.value)}
@@ -244,10 +251,10 @@ export default function LeadDetail() {
           </Select>
           <Select
             value={lead.stage?.documentId || ''}
-            onChange={(e) => fieldMutation.mutate({ stage: e.target.value || null })}
+            onChange={(e) => stageChange.request(lead, (stages || []).find((s: any) => s.documentId === e.target.value))}
             className="w-48"
+            title={lead.stage?.description || undefined}
           >
-            {!lead.stage ? <option value="">Sin etapa</option> : null}
             {(stages || []).map((s: any) => (
               <option key={s.documentId} value={s.documentId}>
                 {s.name}
@@ -267,7 +274,21 @@ export default function LeadDetail() {
         </div>
       </div>
 
-      {convertMutation.error ? <ErrorNote error={convertMutation.error} /> : null}
+      {stageChange.error && !stageChange.dialogOpen ? (
+        <div className="mb-4">
+          <ErrorNote error={new Error(stageChange.error)} />
+        </div>
+      ) : null}
+      {fieldMutation.error ? (
+        <div className="mb-4">
+          <ErrorNote error={fieldMutation.error} />
+        </div>
+      ) : null}
+      {convertMutation.error ? (
+        <div className="mb-4">
+          <ErrorNote error={convertMutation.error} />
+        </div>
+      ) : null}
 
       <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
         <Card className="p-4">
@@ -305,7 +326,7 @@ export default function LeadDetail() {
               <select
                 value={lead.source?.documentId || ''}
                 onChange={(e) => fieldMutation.mutate({ source: e.target.value || null })}
-                className={cx(inputCls, 'border-transparent bg-transparent hover:border-slate-200')}
+                className={inlineSelectCls}
               >
                 <option value="">Sin origen</option>
                 {(sources || []).map((s: any) => (
@@ -318,13 +339,39 @@ export default function LeadDetail() {
             <FieldRow label="Dueño del lead">
               <InlineInput value={form.ownerName ?? ''} onChange={(e) => set('ownerName', e.target.value)} onBlur={() => saveField('ownerName')} placeholder="Quién lo está trabajando" />
             </FieldRow>
-            <FieldRow label="Próximo seguimiento">
+            <FieldRow label="Puntaje de calificación (0–12)" hint="Menos de 7: no se hace propuesta">
+              <InlineInput
+                type="number"
+                min={0}
+                max={12}
+                step={1}
+                value={form.qualificationScore ?? ''}
+                onChange={(e) => set('qualificationScore', e.target.value)}
+                onBlur={saveScore}
+                placeholder="Sin puntaje"
+              />
+            </FieldRow>
+            <FieldRow label="Próximo paso">
               <InlineInput
                 type="date"
                 defaultValue={lead.nextFollowUpDate || ''}
                 key={lead.nextFollowUpDate}
                 onChange={(e) => fieldMutation.mutate({ nextFollowUpDate: e.target.value || null })}
               />
+            </FieldRow>
+            <FieldRow label="Motivo de cierre">
+              <select
+                value={lead.closeReason || ''}
+                onChange={(e) => fieldMutation.mutate({ closeReason: e.target.value || null })}
+                className={inlineSelectCls}
+              >
+                <option value="">—</option>
+                {Object.entries(CLOSE_REASON_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
             </FieldRow>
             <FieldRow label="Última actividad">
               <p className="px-2 py-1 text-sm text-slate-500">{lead.lastActivityAt ? fmtDate(lead.lastActivityAt) : '—'}</p>
@@ -358,13 +405,13 @@ export default function LeadDetail() {
                     </span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-900">{LEAD_ACTIVITY_KIND_LABELS[a.kind]}</span>
+                        <Badge tone="blue">{LEAD_ACTIVITY_KIND_LABELS[a.kind] ?? a.kind}</Badge>
                         <span className="text-xs text-slate-400">
                           {fmtDate(a.date)}
                           {a.loggedByName ? ` · ${a.loggedByName}` : ''}
                         </span>
                       </div>
-                      <p className="mt-0.5 whitespace-pre-line text-sm text-slate-600">{a.description}</p>
+                      {a.description ? <p className="mt-1 whitespace-pre-line text-sm text-slate-600">{a.description}</p> : null}
                     </div>
                   </div>
                 )
@@ -374,6 +421,7 @@ export default function LeadDetail() {
         </Card>
       </div>
 
+      {stageChange.dialog}
       <ActivityModal open={activityModal} onClose={() => setActivityModal(false)} leadId={documentId} />
       <ConfirmDialog
         open={deleting}
