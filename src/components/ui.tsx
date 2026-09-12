@@ -261,6 +261,13 @@ export const PRIORITY_TONES: Record<string, BadgeTone> = {
   urgent: 'red',
 }
 
+export const CONTACT_LEVEL_TONES: Record<string, BadgeTone> = {
+  directo: 'green',
+  correo_directo: 'blue',
+  linkedin: 'violet',
+  generico: 'gray',
+}
+
 export const PIPELINE_OUTCOME_TONES: Record<string, BadgeTone> = {
   open: 'gray',
   won: 'green',

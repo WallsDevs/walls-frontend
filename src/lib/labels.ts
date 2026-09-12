@@ -79,7 +79,7 @@ export const LEAD_ACTIVITY_KIND_LABELS: Record<string, string> = {
   nota: 'Nota',
 }
 
-export { CLOSE_REASON_LABELS } from './leadRules'
+export { CLOSE_REASON_LABELS, CONTACT_LEVEL_LABELS } from './leadRules'
 
 export const PIPELINE_OUTCOME_LABELS: Record<string, string> = {
   open: 'Abierta',

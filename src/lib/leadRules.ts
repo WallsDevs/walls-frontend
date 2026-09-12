@@ -10,6 +10,33 @@ export const CLOSE_REASON_LABELS: Record<string, string> = {
   otro: 'Otro',
 }
 
+export const CONTACT_LEVEL_LABELS: Record<string, string> = {
+  directo: 'Directo',
+  correo_directo: 'Correo directo',
+  linkedin: 'Solo LinkedIn',
+  generico: 'Genérico',
+}
+
+export const CONTACT_LEVEL_HINTS: Record<string, string> = {
+  directo: 'Número o WhatsApp de la persona que decide',
+  correo_directo: 'Correo personal de la persona que decide',
+  linkedin: 'Solo se puede abrir conversación por LinkedIn o redes',
+  generico: 'Solo formulario web o correo tipo info@',
+}
+
+const GENERIC_EMAIL_PREFIXES = ['info', 'contacto', 'contact', 'hola', 'hello', 'soporte', 'support', 'ventas', 'sales', 'team', 'admin', 'marketing']
+
+export const isGenericEmail = (email: string) => GENERIC_EMAIL_PREFIXES.includes(String(email || '').split('@')[0].toLowerCase())
+
+/** Espejo de backend/src/lead-contacts.js: sugerencia a partir de lo que se sabe de los contactos. */
+export function suggestContactLevel(contacts: any[] | undefined) {
+  const list = contacts || []
+  if (list.some((c) => c.phone)) return 'directo'
+  if (list.some((c) => c.email && !isGenericEmail(c.email))) return 'correo_directo'
+  if (list.some((c) => c.linkedinUrl)) return 'linkedin'
+  return 'generico'
+}
+
 export const NEEDS_NEXT_STEP = ['prospeccion', 'llamada', 'propuesta']
 
 export type StageNeed = 'closeReason' | 'nextFollowUpDate'

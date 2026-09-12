@@ -15,10 +15,12 @@ import {
   StickyNote,
   Trash2,
   UserCheck,
+  X,
 } from 'lucide-react'
 import { api, rest } from '../../lib/api'
 import { fmtDate } from '../../lib/format'
-import { CLOSE_REASON_LABELS, LEAD_ACTIVITY_KIND_LABELS, PRIORITY_LABELS } from '../../lib/labels'
+import { CLOSE_REASON_LABELS, CONTACT_LEVEL_LABELS, LEAD_ACTIVITY_KIND_LABELS, PRIORITY_LABELS } from '../../lib/labels'
+import { CONTACT_LEVEL_HINTS, suggestContactLevel } from '../../lib/leadRules'
 import { useStageChange } from '../../components/StageChangeDialog'
 import {
   Badge,
@@ -26,6 +28,7 @@ import {
   Card,
   ColorBadge,
   ConfirmDialog,
+  CONTACT_LEVEL_TONES,
   ErrorNote,
   Field,
   Input,
@@ -132,16 +135,25 @@ function ExternalHref({ href, children }: { href: string; children: ReactNode })
 
 const phoneHref = (raw: string) => (/^https?:\/\//i.test(raw) ? raw : `tel:${raw.replace(/\s+/g, '')}`)
 
+type ContactForm = { name: string; role: string; email: string; phone: string; linkedinUrl: string }
+const emptyContact = (): ContactForm => ({ name: '', role: '', email: '', phone: '', linkedinUrl: '' })
+
 const formFromLead = (lead: any) => ({
   companyName: lead.companyName || '',
-  contactName: lead.contactName || '',
-  contactEmail: lead.contactEmail || '',
-  contactPhone: lead.contactPhone || '',
+  contacts: ((lead.contacts || []) as any[]).map((c) => ({
+    name: c.name || '',
+    role: c.role || '',
+    email: c.email || '',
+    phone: c.phone || '',
+    linkedinUrl: c.linkedinUrl || '',
+  })) as ContactForm[],
+  contactLevel: lead.contactLevel || '',
   website: lead.website || '',
   linkedinUrl: lead.linkedinUrl || '',
   country: lead.country || '',
   source: lead.source?.documentId || '',
   ownerName: lead.ownerName || '',
+  capturedAt: lead.capturedAt || '',
   qualificationScore: lead.qualificationScore ?? '',
   nextFollowUpDate: lead.nextFollowUpDate || '',
   closeReason: lead.closeReason || '',
@@ -161,7 +173,7 @@ export default function LeadDetail() {
     queryKey: ['lead', documentId],
     queryFn: () =>
       rest.one('leads', documentId, {
-        populate: { stage: true, source: true, activities: true, convertedToClient: true },
+        populate: { stage: true, source: true, contacts: true, activities: true, convertedToClient: true },
       }),
   })
 
@@ -176,29 +188,45 @@ export default function LeadDetail() {
   })
 
   const set = (k: string, v: unknown) => setForm((f: any) => ({ ...f, [k]: v }))
+  const setContact = (i: number, k: keyof ContactForm, v: string) =>
+    setForm((f: any) => ({ ...f, contacts: f.contacts.map((c: ContactForm, j: number) => (j === i ? { ...c, [k]: v } : c)) }))
+  const addContact = () => setForm((f: any) => ({ ...f, contacts: [...f.contacts, emptyContact()] }))
+  const removeContact = (i: number) => setForm((f: any) => ({ ...f, contacts: f.contacts.filter((_: ContactForm, j: number) => j !== i) }))
 
   const startEditing = () => {
-    setForm(formFromLead(lead))
+    const next = formFromLead(lead)
+    if (!next.contacts.length) next.contacts = [emptyContact()]
+    setForm(next)
     setEditing(true)
   }
 
   const saveMutation = useMutation({
-    mutationFn: () =>
-      rest.update('leads', documentId, {
+    mutationFn: () => {
+      const contacts = (form.contacts as ContactForm[])
+        .filter((c) => c.name.trim())
+        .map((c) => ({
+          name: c.name.trim(),
+          role: c.role || null,
+          email: c.email || null,
+          phone: c.phone || null,
+          linkedinUrl: c.linkedinUrl || null,
+        }))
+      return rest.update('leads', documentId, {
         companyName: form.companyName.trim(),
-        contactName: form.contactName || null,
-        contactEmail: form.contactEmail || null,
-        contactPhone: form.contactPhone || null,
+        contacts,
+        contactLevel: form.contactLevel || suggestContactLevel(contacts),
         website: form.website || null,
         linkedinUrl: form.linkedinUrl || null,
         country: form.country || null,
         source: form.source || null,
         ownerName: form.ownerName || null,
+        capturedAt: form.capturedAt || null,
         qualificationScore: form.qualificationScore === '' ? null : Number(form.qualificationScore),
         nextFollowUpDate: form.nextFollowUpDate || null,
         closeReason: form.closeReason || null,
         notes: form.notes || null,
-      }),
+      })
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lead', documentId] })
       qc.invalidateQueries({ queryKey: ['leads'] })
@@ -233,6 +261,9 @@ export default function LeadDetail() {
     (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime(),
   )
   const canConvert = lead.stage?.outcome === 'won' && !lead.convertedToClient
+  const contacts: any[] = lead.contacts || []
+  const primary = contacts[0]
+  const suggested = editing ? suggestContactLevel(form.contacts) : null
 
   return (
     <div>
@@ -244,18 +275,14 @@ export default function LeadDetail() {
         <div className="min-w-0">
           <h1 className="text-xl font-semibold tracking-tight text-slate-900">{lead.companyName}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {[lead.contactName, lead.country].filter(Boolean).join(' · ') || 'Sin contacto asignado'}
+            {[primary ? [primary.name, primary.role].filter(Boolean).join(' · ') : '', lead.country].filter(Boolean).join(' · ') ||
+              'Sin contacto asignado'}
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Urgencia</span>
-            <Select
-              value={lead.urgency || ''}
-              onChange={(e) => urgencyMutation.mutate(e.target.value)}
-              className="py-1.5"
-              style={{ width: '8.5rem' }}
-            >
+            <Select value={lead.urgency || ''} onChange={(e) => urgencyMutation.mutate(e.target.value)} className="py-1.5" style={{ width: '8.5rem' }}>
               {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
@@ -322,25 +349,77 @@ export default function LeadDetail() {
                 <Input value={form.companyName} onChange={(e) => set('companyName', e.target.value)} />
               </Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Persona de contacto">
-                  <Input value={form.contactName} onChange={(e) => set('contactName', e.target.value)} />
-                </Field>
                 <Field label="País">
                   <Input value={form.country} onChange={(e) => set('country', e.target.value)} />
                 </Field>
+                <Field label="Captado el">
+                  <Input type="date" value={form.capturedAt} onChange={(e) => set('capturedAt', e.target.value)} />
+                </Field>
               </div>
-              <Field label="Correo">
-                <Input type="email" value={form.contactEmail} onChange={(e) => set('contactEmail', e.target.value)} />
-              </Field>
-              <Field label="Teléfono o WhatsApp">
-                <Input value={form.contactPhone} onChange={(e) => set('contactPhone', e.target.value)} placeholder="+34 600 000 000 o enlace de WhatsApp" />
-              </Field>
               <Field label="Sitio web">
                 <Input value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://…" />
               </Field>
-              <Field label="LinkedIn">
-                <Input value={form.linkedinUrl} onChange={(e) => set('linkedinUrl', e.target.value)} placeholder="https://linkedin.com/in/…" />
+              <Field label="LinkedIn de la empresa">
+                <Input value={form.linkedinUrl} onChange={(e) => set('linkedinUrl', e.target.value)} placeholder="https://linkedin.com/company/…" />
               </Field>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Contactos</p>
+                  <button onClick={addContact} className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700">
+                    <Plus size={13} /> Agregar contacto
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {(form.contacts as ContactForm[]).map((c, i) => (
+                    <div key={i} className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{i === 0 ? 'Contacto principal' : `Contacto ${i + 1}`}</span>
+                        <button onClick={() => removeContact(i)} title="Quitar contacto" className="rounded p-0.5 text-slate-300 hover:bg-red-50 hover:text-red-600">
+                          <X size={13} />
+                        </button>
+                      </div>
+                      <div className="space-y-2.5">
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <Field label="Nombre *">
+                            <Input value={c.name} onChange={(e) => setContact(i, 'name', e.target.value)} />
+                          </Field>
+                          <Field label="Cargo">
+                            <Input value={c.role} onChange={(e) => setContact(i, 'role', e.target.value)} placeholder="CEO, Gerente…" />
+                          </Field>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <Field label="Correo">
+                            <Input type="email" value={c.email} onChange={(e) => setContact(i, 'email', e.target.value)} />
+                          </Field>
+                          <Field label="Teléfono o WhatsApp">
+                            <Input value={c.phone} onChange={(e) => setContact(i, 'phone', e.target.value)} />
+                          </Field>
+                        </div>
+                        <Field label="LinkedIn">
+                          <Input value={c.linkedinUrl} onChange={(e) => setContact(i, 'linkedinUrl', e.target.value)} placeholder="https://linkedin.com/in/…" />
+                        </Field>
+                      </div>
+                    </div>
+                  ))}
+                  {!form.contacts.length ? <p className="text-xs text-slate-400">Sin contactos. Agrega al menos uno para poder escribirle.</p> : null}
+                </div>
+              </div>
+
+              <Field
+                label="Nivel de contacto"
+                hint={suggested ? `Sugerido según los contactos: ${CONTACT_LEVEL_LABELS[suggested]} · ${CONTACT_LEVEL_HINTS[suggested]}` : undefined}
+              >
+                <Select value={form.contactLevel} onChange={(e) => set('contactLevel', e.target.value)}>
+                  <option value="">Usar el sugerido</option>
+                  {Object.entries(CONTACT_LEVEL_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v} — {CONTACT_LEVEL_HINTS[k]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Origen">
                   <Select value={form.source} onChange={(e) => set('source', e.target.value)}>
@@ -390,19 +469,44 @@ export default function LeadDetail() {
           ) : (
             <>
               <div>
-                <ViewRow label="Persona de contacto" empty={!lead.contactName}>
-                  {lead.contactName}
+                <ViewRow label="Nivel de contacto" empty={!lead.contactLevel}>
+                  {lead.contactLevel ? (
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      <Badge tone={CONTACT_LEVEL_TONES[lead.contactLevel] || 'gray'}>{CONTACT_LEVEL_LABELS[lead.contactLevel]}</Badge>
+                      <span className="text-xs text-slate-400">{CONTACT_LEVEL_HINTS[lead.contactLevel]}</span>
+                    </span>
+                  ) : null}
                 </ViewRow>
-                <ViewRow label="Correo" empty={!lead.contactEmail}>
-                  {lead.contactEmail ? <ExternalHref href={`mailto:${lead.contactEmail}`}>{lead.contactEmail}</ExternalHref> : null}
-                </ViewRow>
-                <ViewRow label="Teléfono o WhatsApp" empty={!lead.contactPhone}>
-                  {lead.contactPhone ? <ExternalHref href={phoneHref(lead.contactPhone)}>{lead.contactPhone}</ExternalHref> : null}
-                </ViewRow>
+
+                <div className="border-b border-slate-100 py-2.5">
+                  <p className="text-xs text-slate-500">Contactos</p>
+                  {!contacts.length ? (
+                    <p className="mt-0.5 text-sm text-slate-300">—</p>
+                  ) : (
+                    <div className="mt-1.5 space-y-2.5">
+                      {contacts.map((c: any, i: number) => (
+                        <div key={c.id ?? i} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
+                          <p className="text-sm font-medium text-slate-900">
+                            {c.name}
+                            {c.role ? <span className="ml-1.5 font-normal text-slate-500">· {c.role}</span> : null}
+                            {i === 0 && contacts.length > 1 ? <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">principal</span> : null}
+                          </p>
+                          <div className="mt-1 flex flex-col gap-0.5 text-sm">
+                            {c.email ? <ExternalHref href={`mailto:${c.email}`}>{c.email}</ExternalHref> : null}
+                            {c.phone ? <ExternalHref href={phoneHref(c.phone)}>{c.phone}</ExternalHref> : null}
+                            {c.linkedinUrl ? <ExternalHref href={c.linkedinUrl}>{c.linkedinUrl}</ExternalHref> : null}
+                            {!c.email && !c.phone && !c.linkedinUrl ? <span className="text-xs text-slate-400">Sin datos de contacto</span> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <ViewRow label="Sitio web" empty={!lead.website}>
                   {lead.website ? <ExternalHref href={lead.website}>{lead.website}</ExternalHref> : null}
                 </ViewRow>
-                <ViewRow label="LinkedIn" empty={!lead.linkedinUrl}>
+                <ViewRow label="LinkedIn de la empresa" empty={!lead.linkedinUrl}>
                   {lead.linkedinUrl ? <ExternalHref href={lead.linkedinUrl}>{lead.linkedinUrl}</ExternalHref> : null}
                 </ViewRow>
                 <ViewRow label="País" empty={!lead.country}>
@@ -411,13 +515,14 @@ export default function LeadDetail() {
                 <ViewRow label="Origen" empty={!lead.source}>
                   {lead.source ? <ColorBadge color={lead.source.color}>{lead.source.name}</ColorBadge> : null}
                 </ViewRow>
+                <ViewRow label="Captado el" empty={!lead.capturedAt}>
+                  {lead.capturedAt ? fmtDate(lead.capturedAt) : null}
+                </ViewRow>
                 <ViewRow label="Dueño del lead" empty={!lead.ownerName}>
                   {lead.ownerName}
                 </ViewRow>
                 <ViewRow label="Puntaje de calificación (0–12)" empty={lead.qualificationScore == null}>
-                  <span className={lead.qualificationScore >= 7 ? 'font-semibold text-emerald-700' : 'font-semibold text-slate-900'}>
-                    {lead.qualificationScore}
-                  </span>
+                  <span className={lead.qualificationScore >= 7 ? 'font-semibold text-emerald-700' : 'font-semibold text-slate-900'}>{lead.qualificationScore}</span>
                   {lead.qualificationScore != null && lead.qualificationScore < 7 ? (
                     <span className="ml-2 text-xs text-slate-400">Menos de 7: no se hace propuesta</span>
                   ) : null}

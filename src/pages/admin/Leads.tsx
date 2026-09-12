@@ -5,14 +5,16 @@ import { ChevronLeft, ChevronRight, Globe, Link2, LayoutGrid, List, Settings2, T
 import { rest } from '../../lib/api'
 import { todayISO } from '../../lib/format'
 import { useAuth } from '../../auth/AuthContext'
-import { PRIORITY_LABELS } from '../../lib/labels'
+import { CONTACT_LEVEL_LABELS, PRIORITY_LABELS } from '../../lib/labels'
 import { defaultStage } from '../../lib/leadRules'
+import { currentWeekKey, weekKey, weekLabel } from '../../lib/weeks'
 import { useStageChange } from '../../components/StageChangeDialog'
 import {
   Badge,
   Button,
   ColorBadge,
   ConfirmDialog,
+  CONTACT_LEVEL_TONES,
   EmptyState,
   ErrorNote,
   Field,
@@ -50,35 +52,34 @@ const daysAgoISO = (days: number) => {
   return d.toISOString().slice(0, 10)
 }
 
+const primaryContact = (l: any) => (l.contacts || [])[0]
+const contactLine = (l: any) => {
+  const c = primaryContact(l)
+  const who = c ? [c.name, c.role].filter(Boolean).join(' · ') : ''
+  return [who, l.country].filter(Boolean).join(' · ')
+}
+const leadWeek = (l: any) => weekKey(l.capturedAt || l.createdAt)
+
 const emptyForm = () => ({
   companyName: '',
   contactName: '',
+  contactRole: '',
   contactEmail: '',
   contactPhone: '',
+  contactLinkedin: '',
   website: '',
   linkedinUrl: '',
   country: '',
   source: '',
   urgency: 'medium',
   ownerName: '',
+  capturedAt: todayISO(),
   nextFollowUpDate: '',
   notes: '',
   stage: '',
 })
 
-export function LeadModal({
-  open,
-  onClose,
-  lead,
-  stages,
-  sources,
-}: {
-  open: boolean
-  onClose: () => void
-  lead?: any | null
-  stages: any[]
-  sources: any[]
-}) {
+export function LeadModal({ open, onClose, stages, sources }: { open: boolean; onClose: () => void; stages: any[]; sources: any[] }) {
   const qc = useQueryClient()
   const { auth } = useAuth()
   const [form, setForm] = useState<any>(emptyForm())
@@ -89,48 +90,37 @@ export function LeadModal({
 
   useEffect(() => {
     if (!open) return
-    setForm(
-      lead
-        ? {
-            companyName: lead.companyName || '',
-            contactName: lead.contactName || '',
-            contactEmail: lead.contactEmail || '',
-            contactPhone: lead.contactPhone || '',
-            website: lead.website || '',
-            linkedinUrl: lead.linkedinUrl || '',
-            country: lead.country || '',
-            source: lead.source?.documentId || '',
-            urgency: lead.urgency || 'medium',
-            ownerName: lead.ownerName || '',
-            nextFollowUpDate: lead.nextFollowUpDate || '',
-            notes: lead.notes || '',
-            stage: lead.stage?.documentId || '',
-          }
-        : { ...emptyForm(), ownerName: myName, stage: defaultStage(stages)?.documentId || '' },
-    )
-  }, [open, lead])
+    setForm({ ...emptyForm(), ownerName: myName, stage: defaultStage(stages)?.documentId || '' })
+  }, [open])
 
   const set = (k: string, v: unknown) => setForm((f: any) => ({ ...f, [k]: v }))
 
   const mutation = useMutation({
-    mutationFn: () => {
-      const data = {
+    mutationFn: () =>
+      rest.create('leads', {
         companyName: form.companyName,
-        contactName: form.contactName || null,
-        contactEmail: form.contactEmail || null,
-        contactPhone: form.contactPhone || null,
+        contacts: form.contactName.trim()
+          ? [
+              {
+                name: form.contactName.trim(),
+                role: form.contactRole || null,
+                email: form.contactEmail || null,
+                phone: form.contactPhone || null,
+                linkedinUrl: form.contactLinkedin || null,
+              },
+            ]
+          : [],
         website: form.website || null,
         linkedinUrl: form.linkedinUrl || null,
         country: form.country || null,
         source: form.source || null,
         urgency: form.urgency,
         ownerName: form.ownerName || null,
+        capturedAt: form.capturedAt || null,
         nextFollowUpDate: form.nextFollowUpDate || null,
         notes: form.notes || null,
         stage: form.stage || defaultStage(stages)?.documentId || null,
-      }
-      return lead ? rest.update('leads', lead.documentId, data) : rest.create('leads', data)
-    },
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leads'] })
       onClose()
@@ -141,14 +131,14 @@ export function LeadModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={lead ? 'Editar lead' : 'Nuevo lead'}
+      title="Nuevo lead"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
           <Button onClick={() => mutation.mutate()} loading={mutation.isPending} disabled={!form.companyName}>
-            {lead ? 'Guardar cambios' : 'Crear lead'}
+            Crear lead
           </Button>
         </>
       }
@@ -158,31 +148,52 @@ export function LeadModal({
           <Input value={form.companyName} onChange={(e) => set('companyName', e.target.value)} placeholder="Nombre de la empresa" />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Persona de contacto">
-            <Input value={form.contactName} onChange={(e) => set('contactName', e.target.value)} />
+          <Field label="País">
+            <Input value={form.country} onChange={(e) => set('country', e.target.value)} />
           </Field>
-          <Field label="Teléfono">
-            <Input value={form.contactPhone} onChange={(e) => set('contactPhone', e.target.value)} />
+          <Field label="Captado el">
+            <Input type="date" value={form.capturedAt} onChange={(e) => set('capturedAt', e.target.value)} />
           </Field>
         </div>
-        <Field label="Correo">
-          <Input type="email" value={form.contactEmail} onChange={(e) => set('contactEmail', e.target.value)} />
-        </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Sitio web">
             <Input value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://…" />
           </Field>
-          <Field label="LinkedIn">
-            <Input value={form.linkedinUrl} onChange={(e) => set('linkedinUrl', e.target.value)} placeholder="https://linkedin.com/in/…" />
+          <Field label="LinkedIn de la empresa">
+            <Input value={form.linkedinUrl} onChange={(e) => set('linkedinUrl', e.target.value)} placeholder="https://linkedin.com/company/…" />
           </Field>
         </div>
-        <Field label="País">
-          <Input value={form.country} onChange={(e) => set('country', e.target.value)} />
-        </Field>
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Contacto principal</p>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Nombre">
+                <Input value={form.contactName} onChange={(e) => set('contactName', e.target.value)} />
+              </Field>
+              <Field label="Cargo">
+                <Input value={form.contactRole} onChange={(e) => set('contactRole', e.target.value)} placeholder="CEO, Gerente…" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Correo">
+                <Input type="email" value={form.contactEmail} onChange={(e) => set('contactEmail', e.target.value)} />
+              </Field>
+              <Field label="Teléfono o WhatsApp">
+                <Input value={form.contactPhone} onChange={(e) => set('contactPhone', e.target.value)} />
+              </Field>
+            </div>
+            <Field label="LinkedIn de la persona">
+              <Input value={form.contactLinkedin} onChange={(e) => set('contactLinkedin', e.target.value)} placeholder="https://linkedin.com/in/…" />
+            </Field>
+            <p className="text-[11px] text-slate-400">Puedes agregar más contactos desde el detalle del lead. El nivel de contacto se sugiere solo.</p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <Field label="Origen">
             <Select value={form.source} onChange={(e) => set('source', e.target.value)}>
-              {!form.source ? <option value="">Sin origen</option> : null}
+              <option value="">Sin origen</option>
               {sources.map((s: any) => (
                 <option key={s.documentId} value={s.documentId}>
                   {s.name}
@@ -237,8 +248,10 @@ export default function Leads() {
   const [sourceFilter, setSourceFilter] = useState('')
   const [urgencyFilter, setUrgencyFilter] = useState('')
   const [countryFilter, setCountryFilter] = useState('')
+  const [levelFilter, setLevelFilter] = useState('')
+  const [weekFilter, setWeekFilter] = useState('')
   const [overdueOnly, setOverdueOnly] = useState(false)
-  const [modal, setModal] = useState<{ open: boolean; lead?: any }>({ open: false })
+  const [modalOpen, setModalOpen] = useState(false)
   const [deleting, setDeleting] = useState<any | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
@@ -248,7 +261,7 @@ export default function Leads() {
     queryKey: ['leads'],
     queryFn: () =>
       rest.list('leads', {
-        populate: { stage: true, source: true },
+        populate: { stage: true, source: true, contacts: true },
         sort: 'updatedAt:desc',
         pagination: { pageSize: 300 },
       }),
@@ -293,27 +306,46 @@ export default function Leads() {
     [leads],
   )
 
+  const thisWeek = currentWeekKey(0)
+  const lastWeek = currentWeekKey(-1)
+  const weeks = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const l of leads || []) {
+      const k = leadWeek(l)
+      counts[k] = (counts[k] || 0) + 1
+    }
+    return Object.entries(counts)
+      .sort(([a], [b]) => (a < b ? 1 : -1))
+      .map(([key, count]) => ({ key, count }))
+  }, [leads])
+  const weekTarget = weekFilter === 'this' ? thisWeek : weekFilter === 'last' ? lastWeek : weekFilter
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return (leads || []).filter((l: any) => {
-      if (q && !l.companyName.toLowerCase().includes(q) && !(l.contactName || '').toLowerCase().includes(q)) return false
+      const c = primaryContact(l)
+      if (q && !l.companyName.toLowerCase().includes(q) && !(c?.name || '').toLowerCase().includes(q)) return false
       if (stageFilter && l.stage?.documentId !== stageFilter) return false
       if (sourceFilter && l.source?.documentId !== sourceFilter) return false
       if (urgencyFilter && l.urgency !== urgencyFilter) return false
       if (countryFilter && l.country !== countryFilter) return false
+      if (levelFilter && l.contactLevel !== levelFilter) return false
+      if (weekTarget && leadWeek(l) !== weekTarget) return false
       if (overdueOnly && !isOverdue(l)) return false
       return true
     })
-  }, [leads, search, stageFilter, sourceFilter, urgencyFilter, countryFilter, overdueOnly])
+  }, [leads, search, stageFilter, sourceFilter, urgencyFilter, countryFilter, levelFilter, weekTarget, overdueOnly])
 
   const overdueCount = (leads || []).filter(isOverdue).length
-  const hasActiveFilters = !!(search || stageFilter || sourceFilter || urgencyFilter || countryFilter || overdueOnly)
+  const hasActiveFilters = !!(search || stageFilter || sourceFilter || urgencyFilter || countryFilter || levelFilter || weekFilter || overdueOnly)
   const clearFilters = () => {
     setSearch('')
     setStageFilter('')
     setSourceFilter('')
     setUrgencyFilter('')
     setCountryFilter('')
+    setLevelFilter('')
+    setWeekFilter('')
     setOverdueOnly(false)
   }
 
@@ -327,10 +359,102 @@ export default function Leads() {
     const byKind: Record<string, number> = {}
     for (const a of weekActivities || []) byKind[a.kind] = (byKind[a.kind] || 0) + 1
     const won = (leads || []).filter((l: any) => l.wonAt && String(l.wonAt).slice(0, 10) >= weekSince).length
-    return { byKind, won }
+    const captured = (leads || []).filter((l: any) => (l.capturedAt || String(l.createdAt).slice(0, 10)) >= weekSince).length
+    return { byKind, won, captured }
   }, [weekActivities, leads, weekSince])
 
+  // Lista agrupada por semana de captación, de la más reciente a la más antigua.
+  const listGroups = useMemo(() => {
+    const groups = new Map<string, any[]>()
+    const sorted = [...filtered].sort((a, b) => ((a.capturedAt || a.createdAt) < (b.capturedAt || b.createdAt) ? 1 : -1))
+    for (const l of sorted) {
+      const k = leadWeek(l)
+      if (!groups.has(k)) groups.set(k, [])
+      groups.get(k)!.push(l)
+    }
+    return Array.from(groups.entries())
+  }, [filtered])
+
   if (isLoading || stagesLoading || sourcesLoading) return <PageLoader />
+
+  const renderCard = (l: any) => {
+    const overdue = isOverdue(l)
+    const line = contactLine(l)
+    const hasLinkedin = l.linkedinUrl || (l.contacts || []).some((c: any) => c.linkedinUrl)
+    return (
+      <div
+        key={l.documentId}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', l.documentId)
+          e.dataTransfer.effectAllowed = 'move'
+          setDraggingId(l.documentId)
+        }}
+        onDragEnd={() => {
+          setDraggingId(null)
+          setDragOverStage(null)
+        }}
+        onClick={() => navigate(`/leads/${l.documentId}`)}
+        className={cx(
+          'group relative w-full cursor-grab overflow-hidden rounded-lg border bg-white py-3 pl-3.5 pr-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
+          overdue ? 'border-red-200' : 'border-slate-200',
+          draggingId === l.documentId && 'opacity-40',
+        )}
+      >
+        {l.urgency ? <span className="absolute inset-y-0 left-0 w-1" style={{ background: URGENCY_STRIPE[l.urgency] || '#94a3b8' }} /> : null}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            setDeleting(l)
+          }}
+          className="absolute right-2 top-2 rounded-lg p-1 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+        >
+          <Trash2 size={13} />
+        </button>
+        <div className="flex items-start justify-between gap-2 pr-5">
+          <p className="truncate text-sm font-medium text-slate-900">{l.companyName}</p>
+          {l.urgency ? <Badge tone={PRIORITY_TONES[l.urgency] || 'gray'}>{PRIORITY_LABELS[l.urgency]}</Badge> : null}
+        </div>
+        {line ? <p className="mt-0.5 truncate text-xs text-slate-500">{line}</p> : null}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {l.contactLevel ? <Badge tone={CONTACT_LEVEL_TONES[l.contactLevel] || 'gray'}>{CONTACT_LEVEL_LABELS[l.contactLevel]}</Badge> : null}
+          {l.source ? <ColorBadge color={l.source.color}>{l.source.name}</ColorBadge> : null}
+          {l.website ? (
+            <span title={l.website} className="flex size-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+              <Globe size={11} />
+            </span>
+          ) : null}
+          {hasLinkedin ? (
+            <span title="LinkedIn" className="flex size-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+              <Link2 size={11} />
+            </span>
+          ) : null}
+          {l.ownerName ? (
+            <span
+              title={l.ownerName}
+              className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
+            >
+              {l.ownerName
+                .split(' ')
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((p: string) => p[0])
+                .join('')
+                .toUpperCase()}
+            </span>
+          ) : null}
+        </div>
+        {overdue ? (
+          <div className="mt-1.5 flex items-center justify-between">
+            <span className="text-xs text-red-600">Venció {l.nextFollowUpDate}</span>
+            <Badge tone="red">Vencido</Badge>
+          </div>
+        ) : l.nextFollowUpDate ? (
+          <p className="mt-1.5 text-xs text-slate-400">Próximo paso {l.nextFollowUpDate}</p>
+        ) : null}
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -366,7 +490,7 @@ export default function Leads() {
                 <LayoutGrid size={14} /> Tablero
               </button>
             </div>
-            <Button icon={Plus} onClick={() => setModal({ open: true })}>
+            <Button icon={Plus} onClick={() => setModalOpen(true)}>
               Nuevo lead
             </Button>
           </div>
@@ -374,9 +498,21 @@ export default function Leads() {
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="w-full sm:w-56">
+        <div className="w-full sm:w-52">
           <SearchInput value={search} onChange={setSearch} placeholder="Buscar lead…" />
         </div>
+        <Select value={weekFilter} onChange={(e) => setWeekFilter(e.target.value)} className="w-full sm:w-52">
+          <option value="">Todas las semanas</option>
+          <option value="this">Esta semana ({weeks.find((w) => w.key === thisWeek)?.count || 0})</option>
+          <option value="last">Semana pasada ({weeks.find((w) => w.key === lastWeek)?.count || 0})</option>
+          {weeks
+            .filter((w) => w.key !== thisWeek && w.key !== lastWeek)
+            .map((w) => (
+              <option key={w.key} value={w.key}>
+                {weekLabel(w.key)} ({w.count})
+              </option>
+            ))}
+        </Select>
         {view === 'list' ? (
           <Select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className="w-full sm:w-44">
             <option value="">Todas las etapas</option>
@@ -387,6 +523,14 @@ export default function Leads() {
             ))}
           </Select>
         ) : null}
+        <Select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} className="w-full sm:w-44">
+          <option value="">Todo nivel de contacto</option>
+          {Object.entries(CONTACT_LEVEL_LABELS).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
+        </Select>
         <Select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-full sm:w-40">
           <option value="">Todos los orígenes</option>
           {(sources || []).map((s: any) => (
@@ -443,7 +587,11 @@ export default function Leads() {
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Leads captados</p>
+          <p className="text-lg font-semibold text-slate-900">{weekCounts.captured}</p>
+        </div>
         {WEEK_KINDS.map((k) => (
           <div key={k.kind} className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
             <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{k.label}</p>
@@ -454,7 +602,7 @@ export default function Leads() {
           <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-600">Ganados</p>
           <p className="text-lg font-semibold text-emerald-700">{weekCounts.won}</p>
         </div>
-        <p className="col-span-2 -mt-1 text-[11px] text-slate-400 sm:col-span-5">Esta semana · últimos 7 días</p>
+        <p className="col-span-2 -mt-1 text-[11px] text-slate-400 sm:col-span-3 lg:col-span-6">Esta semana · últimos 7 días</p>
       </div>
 
       {stageChange.error && !stageChange.dialogOpen ? (
@@ -479,7 +627,7 @@ export default function Leads() {
           icon={Target}
           title="No hay leads con estos filtros"
           action={
-            <Button icon={Plus} onClick={() => setModal({ open: true })}>
+            <Button icon={Plus} onClick={() => setModalOpen(true)}>
               Nuevo lead
             </Button>
           }
@@ -490,6 +638,7 @@ export default function Leads() {
             <tr>
               <Th>Empresa</Th>
               <Th>Contacto</Th>
+              <Th>Nivel</Th>
               <Th>Origen</Th>
               <Th>Urgencia</Th>
               <Th>Etapa</Th>
@@ -498,51 +647,76 @@ export default function Leads() {
               <Th />
             </tr>
           </thead>
-          <tbody>
-            {filtered.map((l: any) => (
-              <tr key={l.documentId} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/leads/${l.documentId}`)}>
-                <Td>
-                  <p className="font-medium text-slate-900">{l.companyName}</p>
-                </Td>
-                <Td className="text-slate-600">{l.contactName || '—'}</Td>
-                <Td>{l.source ? <ColorBadge color={l.source.color}>{l.source.name}</ColorBadge> : '—'}</Td>
-                <Td>
-                  {l.urgency ? <Badge tone={PRIORITY_TONES[l.urgency] || 'gray'}>{PRIORITY_LABELS[l.urgency]}</Badge> : '—'}
-                </Td>
-                <Td>
-                  {l.stage ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="inline-block size-2 rounded-full" style={{ background: l.stage.color || '#94a3b8' }} />
-                      {l.stage.name}
-                    </span>
-                  ) : (
-                    '—'
-                  )}
-                </Td>
-                <Td className="text-slate-600">{l.ownerName || '—'}</Td>
-                <Td>
-                  {isOverdue(l) ? (
-                    <Badge tone="red">Vencido</Badge>
-                  ) : l.nextFollowUpDate ? (
-                    <span className="text-slate-500">{l.nextFollowUpDate}</span>
-                  ) : (
-                    <span className="text-slate-300">—</span>
-                  )}
-                </Td>
-                <Td>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setDeleting(l)
-                    }}
-                    className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </Td>
+          {listGroups.map(([key, rows]) => (
+            <tbody key={key}>
+              <tr>
+                <td colSpan={9} className="bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {key === thisWeek ? 'Esta semana' : key === lastWeek ? 'Semana pasada' : weekLabel(key)}
+                  <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">
+                    {key === thisWeek || key === lastWeek ? `${weekLabel(key)} · ` : ''}
+                    {rows.length} {rows.length === 1 ? 'lead' : 'leads'}
+                  </span>
+                </td>
               </tr>
-            ))}
-          </tbody>
+              {rows.map((l: any) => {
+                const c = primaryContact(l)
+                return (
+                  <tr key={l.documentId} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/leads/${l.documentId}`)}>
+                    <Td>
+                      <p className="font-medium text-slate-900">{l.companyName}</p>
+                      {l.country ? <p className="text-xs text-slate-400">{l.country}</p> : null}
+                    </Td>
+                    <Td>
+                      {c ? (
+                        <>
+                          <p className="text-slate-700">{c.name}</p>
+                          {c.role ? <p className="text-xs text-slate-400">{c.role}</p> : null}
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </Td>
+                    <Td>
+                      {l.contactLevel ? <Badge tone={CONTACT_LEVEL_TONES[l.contactLevel] || 'gray'}>{CONTACT_LEVEL_LABELS[l.contactLevel]}</Badge> : '—'}
+                    </Td>
+                    <Td>{l.source ? <ColorBadge color={l.source.color}>{l.source.name}</ColorBadge> : '—'}</Td>
+                    <Td>{l.urgency ? <Badge tone={PRIORITY_TONES[l.urgency] || 'gray'}>{PRIORITY_LABELS[l.urgency]}</Badge> : '—'}</Td>
+                    <Td>
+                      {l.stage ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="inline-block size-2 rounded-full" style={{ background: l.stage.color || '#94a3b8' }} />
+                          {l.stage.name}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </Td>
+                    <Td className="text-slate-600">{l.ownerName || '—'}</Td>
+                    <Td>
+                      {isOverdue(l) ? (
+                        <Badge tone="red">Vencido</Badge>
+                      ) : l.nextFollowUpDate ? (
+                        <span className="text-slate-500">{l.nextFollowUpDate}</span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </Td>
+                    <Td>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDeleting(l)
+                        }}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </Td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          ))}
         </TableWrap>
       ) : (
         <div
@@ -577,11 +751,7 @@ export default function Leads() {
               >
                 {columnCollapsed ? (
                   <>
-                    <button
-                      onClick={() => toggleCollapsed(s)}
-                      title={`Expandir ${s.name}`}
-                      className="rounded-md p-1 text-slate-400 hover:bg-white hover:text-slate-700"
-                    >
+                    <button onClick={() => toggleCollapsed(s)} title={`Expandir ${s.name}`} className="rounded-md p-1 text-slate-400 hover:bg-white hover:text-slate-700">
                       <ChevronLeft size={14} />
                     </button>
                     <span className="rounded-full bg-white px-1.5 text-xs text-slate-500">{list.length}</span>
@@ -596,106 +766,19 @@ export default function Leads() {
                 ) : (
                   <>
                     <div className="mb-2 flex items-center justify-between px-1">
-                      <span
-                        title={s.description || undefined}
-                        className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
-                      >
+                      <span title={s.description || undefined} className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
                         <span className="inline-block size-2 rounded-full" style={{ background: s.color || '#94a3b8' }} />
                         {s.name}
                       </span>
                       <span className="flex items-center gap-1">
                         <span className="rounded-full bg-white px-1.5 text-xs text-slate-500">{list.length}</span>
-                        <button
-                          onClick={() => toggleCollapsed(s)}
-                          title={`Contraer ${s.name}`}
-                          className="rounded-md p-0.5 text-slate-400 hover:bg-white hover:text-slate-700"
-                        >
+                        <button onClick={() => toggleCollapsed(s)} title={`Contraer ${s.name}`} className="rounded-md p-0.5 text-slate-400 hover:bg-white hover:text-slate-700">
                           <ChevronRight size={14} />
                         </button>
                       </span>
                     </div>
                     <div className="space-y-2">
-                      {list.map((l: any) => {
-                        const overdue = isOverdue(l)
-                        return (
-                          <div
-                            key={l.documentId}
-                            draggable
-                            onDragStart={(e) => {
-                              e.dataTransfer.setData('text/plain', l.documentId)
-                              e.dataTransfer.effectAllowed = 'move'
-                              setDraggingId(l.documentId)
-                            }}
-                            onDragEnd={() => {
-                              setDraggingId(null)
-                              setDragOverStage(null)
-                            }}
-                            onClick={() => navigate(`/leads/${l.documentId}`)}
-                            className={cx(
-                              'group relative w-full cursor-grab overflow-hidden rounded-lg border bg-white py-3 pl-3.5 pr-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
-                              overdue ? 'border-red-200' : 'border-slate-200',
-                              draggingId === l.documentId && 'opacity-40',
-                            )}
-                          >
-                            {l.urgency ? (
-                              <span className="absolute inset-y-0 left-0 w-1" style={{ background: URGENCY_STRIPE[l.urgency] || '#94a3b8' }} />
-                            ) : null}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setDeleting(l)
-                              }}
-                              className="absolute right-2 top-2 rounded-lg p-1 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                            <div className="flex items-start justify-between gap-2 pr-5">
-                              <p className="truncate text-sm font-medium text-slate-900">{l.companyName}</p>
-                              {l.urgency ? <Badge tone={PRIORITY_TONES[l.urgency] || 'gray'}>{PRIORITY_LABELS[l.urgency]}</Badge> : null}
-                            </div>
-                            {l.contactName || l.country ? (
-                              <p className="mt-0.5 truncate text-xs text-slate-500">
-                                {[l.contactName, l.country].filter(Boolean).join(' · ')}
-                              </p>
-                            ) : null}
-                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                              {l.source ? <ColorBadge color={l.source.color}>{l.source.name}</ColorBadge> : null}
-                              {l.website ? (
-                                <span title={l.website} className="flex size-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                                  <Globe size={11} />
-                                </span>
-                              ) : null}
-                              {l.linkedinUrl ? (
-                                <span title={l.linkedinUrl} className="flex size-5 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                                  <Link2 size={11} />
-                                </span>
-                              ) : null}
-                              {l.ownerName ? (
-                                <span
-                                  title={l.ownerName}
-                                  className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
-                                >
-                                  {l.ownerName
-                                    .split(' ')
-                                    .filter(Boolean)
-                                    .slice(0, 2)
-                                    .map((p: string) => p[0])
-                                    .join('')
-                                    .toUpperCase()}
-                                </span>
-                              ) : null}
-                            </div>
-                            {overdue ? (
-                              <div className="mt-1.5 flex items-center justify-between">
-                                <span className="text-xs text-red-600">Venció {l.nextFollowUpDate}</span>
-                                <Badge tone="red">Vencido</Badge>
-                              </div>
-                            ) : l.nextFollowUpDate ? (
-                              <p className="mt-1.5 text-xs text-slate-400">Próximo paso {l.nextFollowUpDate}</p>
-                            ) : null}
-                          </div>
-                        )
-                      })}
+                      {list.map(renderCard)}
                       {!list.length && <p className="px-1 py-3 text-center text-xs text-slate-400">Vacío</p>}
                     </div>
                   </>
@@ -707,7 +790,7 @@ export default function Leads() {
       )}
 
       {stageChange.dialog}
-      <LeadModal open={modal.open} onClose={() => setModal({ open: false })} lead={modal.lead} stages={boardColumns} sources={sources || []} />
+      <LeadModal open={modalOpen} onClose={() => setModalOpen(false)} stages={boardColumns} sources={sources || []} />
       <ConfirmDialog
         open={!!deleting}
         onClose={() => setDeleting(null)}
