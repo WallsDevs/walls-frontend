@@ -385,8 +385,14 @@ export default function Leads() {
         ) : null}
         <button
           onClick={() => setOverdueOnly((v) => !v)}
+          disabled={overdueCount === 0}
+          title={
+            overdueCount === 0
+              ? 'No hay leads vencidos: para que un lead aparezca aquí necesita una fecha de "Próximo seguimiento" ya pasada'
+              : undefined
+          }
           className={cx(
-            'whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
+            'whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
             overdueOnly ? 'border-red-200 bg-red-50 text-red-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
           )}
         >
