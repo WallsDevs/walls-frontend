@@ -1,6 +1,7 @@
 import { X, Loader2, Search, type LucideIcon } from 'lucide-react'
 import {
   useEffect,
+  useState,
   type ReactNode,
   type InputHTMLAttributes,
   type SelectHTMLAttributes,
@@ -116,6 +117,50 @@ export function SearchInput({
         className={cx(inputCls, 'pl-9')}
       />
     </div>
+  )
+}
+
+/**
+ * Texto editable en línea: escribe en local y guarda al salir del campo (o con Enter).
+ * Guardar en cada tecla hace que el refresco de datos pise lo que se está escribiendo.
+ */
+export function EditableText({
+  value,
+  onSave,
+  className,
+  placeholder,
+}: {
+  value: string
+  onSave: (next: string) => void
+  className?: string
+  placeholder?: string
+}) {
+  const [draft, setDraft] = useState(value)
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    if (!focused) setDraft(value)
+  }, [value, focused])
+
+  return (
+    <input
+      value={draft}
+      placeholder={placeholder}
+      onChange={(e) => setDraft(e.target.value)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => {
+        setFocused(false)
+        if (draft !== value) onSave(draft)
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        if (e.key === 'Escape') {
+          setDraft(value)
+          ;(e.target as HTMLInputElement).blur()
+        }
+      }}
+      className={className}
+    />
   )
 }
 

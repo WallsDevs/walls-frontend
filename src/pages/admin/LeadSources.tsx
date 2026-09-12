@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { ArrowDown, ArrowLeft, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { rest } from '../../lib/api'
-import { Button, ConfirmDialog, ErrorNote, Field, Input, Modal, PageLoader } from '../../components/ui'
+import { Button, ConfirmDialog, EditableText, ErrorNote, Field, Input, Modal, PageLoader } from '../../components/ui'
 
 const emptyForm = () => ({ name: '', color: '#2a78d6' })
 
@@ -126,9 +126,9 @@ export default function LeadSources() {
               className="size-6 shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-0"
               title="Color del origen"
             />
-            <input
+            <EditableText
               value={s.name}
-              onChange={(e) => updateMutation.mutate({ id: s.documentId, data: { name: e.target.value } })}
+              onSave={(name) => name.trim() && updateMutation.mutate({ id: s.documentId, data: { name: name.trim() } })}
               className="flex-1 rounded-lg border border-transparent px-2 py-1 text-sm font-medium text-slate-900 hover:border-slate-200 focus:border-brand-500 focus:outline-none"
             />
             <button onClick={() => setDeleting(s)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600">

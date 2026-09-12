@@ -8,6 +8,7 @@ import {
   Badge,
   Button,
   ConfirmDialog,
+  EditableText,
   ErrorNote,
   Field,
   Input,
@@ -158,14 +159,14 @@ export default function PipelineStages() {
               title="Color de la etapa"
             />
             <div className="min-w-0 flex-1">
-              <input
+              <EditableText
                 value={s.name}
-                onChange={(e) => updateMutation.mutate({ id: s.documentId, data: { name: e.target.value } })}
+                onSave={(name) => name.trim() && updateMutation.mutate({ id: s.documentId, data: { name: name.trim() } })}
                 className="w-full rounded-lg border border-transparent px-2 py-1 text-sm font-medium text-slate-900 hover:border-slate-200 focus:border-brand-500 focus:outline-none"
               />
-              <input
+              <EditableText
                 value={s.description || ''}
-                onChange={(e) => updateMutation.mutate({ id: s.documentId, data: { description: e.target.value } })}
+                onSave={(description) => updateMutation.mutate({ id: s.documentId, data: { description: description.trim() || null } })}
                 placeholder="Descripción (se muestra como ayuda)"
                 className="w-full rounded-lg border border-transparent px-2 py-0.5 text-xs text-slate-500 placeholder:text-slate-300 hover:border-slate-200 focus:border-brand-500 focus:outline-none"
               />
