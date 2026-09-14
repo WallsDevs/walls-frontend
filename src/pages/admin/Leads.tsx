@@ -9,6 +9,7 @@ import { CONTACT_LEVEL_LABELS, PRIORITY_LABELS } from '../../lib/labels'
 import { defaultStage } from '../../lib/leadRules'
 import { currentWeekKey, weekKey, weekLabel } from '../../lib/weeks'
 import { useStageChange } from '../../components/StageChangeDialog'
+import LeadDetailPanel from '../../components/LeadDetailPanel'
 import {
   Badge,
   Button,
@@ -252,6 +253,7 @@ export default function Leads() {
   const [weekFilter, setWeekFilter] = useState('')
   const [overdueOnly, setOverdueOnly] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<any | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
@@ -394,7 +396,7 @@ export default function Leads() {
           setDraggingId(null)
           setDragOverStage(null)
         }}
-        onClick={() => navigate(`/leads/${l.documentId}`)}
+        onClick={() => setOpenLeadId(l.documentId)}
         className={cx(
           'group relative w-full cursor-grab overflow-hidden rounded-lg border bg-white py-3 pl-3.5 pr-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
           overdue ? 'border-red-200' : 'border-slate-200',
@@ -661,7 +663,7 @@ export default function Leads() {
               {rows.map((l: any) => {
                 const c = primaryContact(l)
                 return (
-                  <tr key={l.documentId} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/leads/${l.documentId}`)}>
+                  <tr key={l.documentId} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpenLeadId(l.documentId)}>
                     <Td>
                       <p className="font-medium text-slate-900">{l.companyName}</p>
                       {l.country ? <p className="text-xs text-slate-400">{l.country}</p> : null}
@@ -790,6 +792,14 @@ export default function Leads() {
       )}
 
       {stageChange.dialog}
+      <Modal
+        open={!!openLeadId}
+        size="xl"
+        title={(leads || []).find((l: any) => l.documentId === openLeadId)?.companyName || 'Lead'}
+        onClose={() => setOpenLeadId(null)}
+      >
+        {openLeadId ? <LeadDetailPanel documentId={openLeadId} embedded onDeleted={() => setOpenLeadId(null)} /> : null}
+      </Modal>
       <LeadModal open={modalOpen} onClose={() => setModalOpen(false)} stages={boardColumns} sources={sources || []} />
       <ConfirmDialog
         open={!!deleting}

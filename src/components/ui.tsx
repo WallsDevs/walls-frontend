@@ -276,6 +276,12 @@ export const PIPELINE_OUTCOME_TONES: Record<string, BadgeTone> = {
 
 /* ---------- Modal ---------- */
 
+const MODAL_SIZES = {
+  md: 'sm:max-w-lg',
+  lg: 'sm:max-w-3xl',
+  xl: 'sm:max-w-6xl',
+} as const
+
 export function Modal({
   open,
   onClose,
@@ -283,14 +289,18 @@ export function Modal({
   children,
   footer,
   wide,
+  size: sizeProp,
 }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
   footer?: ReactNode
+  /** Alias de size="lg" */
   wide?: boolean
+  size?: keyof typeof MODAL_SIZES
 }) {
+  const size = sizeProp ?? (wide ? 'lg' : 'md')
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -305,16 +315,17 @@ export function Modal({
       <div
         className={cx(
           'relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl',
-          wide ? 'sm:max-w-3xl' : 'sm:max-w-lg',
+          MODAL_SIZES[size],
+          size === 'xl' && 'sm:mx-6 sm:h-[92vh]',
         )}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-          <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+          <h2 className={cx('font-semibold text-slate-900', size === 'xl' ? 'text-lg tracking-tight' : 'text-sm')}>{title}</h2>
           <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
             <X size={18} />
           </button>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
+        <div className={cx('overflow-y-auto', size === 'xl' ? 'flex-1 bg-slate-100 px-6 py-5' : 'px-5 py-4')}>{children}</div>
         {footer ? (
           <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">{footer}</div>
         ) : null}
