@@ -6,7 +6,7 @@ import { rest } from '../../lib/api'
 import { todayISO } from '../../lib/format'
 import { useAuth } from '../../auth/AuthContext'
 import { CONTACT_LEVEL_LABELS, PRIORITY_LABELS } from '../../lib/labels'
-import { defaultStage } from '../../lib/leadRules'
+import { defaultStage, NEXT_STEP_STYLES, nextStepLabel, nextStepStatus } from '../../lib/leadRules'
 import { currentWeekKey, weekKey, weekLabel } from '../../lib/weeks'
 import { useStageChange } from '../../components/StageChangeDialog'
 import LeadDetailPanel from '../../components/LeadDetailPanel'
@@ -381,6 +381,8 @@ export default function Leads() {
 
   const renderCard = (l: any) => {
     const overdue = isOverdue(l)
+    const stepStatus = nextStepStatus(l, today)
+    const stepStyle = stepStatus ? NEXT_STEP_STYLES[stepStatus] : null
     const line = contactLine(l)
     const hasLinkedin = l.linkedinUrl || (l.contacts || []).some((c: any) => c.linkedinUrl)
     return (
@@ -399,7 +401,7 @@ export default function Leads() {
         onClick={() => setOpenLeadId(l.documentId)}
         className={cx(
           'group relative w-full cursor-grab overflow-hidden rounded-lg border bg-white py-3 pl-3.5 pr-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing',
-          overdue ? 'border-red-200' : 'border-slate-200',
+          stepStyle ? stepStyle.border : 'border-slate-200',
           draggingId === l.documentId && 'opacity-40',
         )}
       >
@@ -446,13 +448,11 @@ export default function Leads() {
             </span>
           ) : null}
         </div>
-        {overdue ? (
-          <div className="mt-1.5 flex items-center justify-between">
-            <span className="text-xs text-red-600">Venció {l.nextFollowUpDate}</span>
-            <Badge tone="red">Vencido</Badge>
+        {stepStatus && stepStyle ? (
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <span className={cx('text-xs', stepStyle.text)}>{nextStepLabel(stepStatus, l.nextFollowUpDate)}</span>
+            {overdue ? <Badge tone="red">Vencido</Badge> : stepStatus === 'today' || stepStatus === 'soon' ? <Badge tone="amber">Por vencer</Badge> : null}
           </div>
-        ) : l.nextFollowUpDate ? (
-          <p className="mt-1.5 text-xs text-slate-400">Próximo paso {l.nextFollowUpDate}</p>
         ) : null}
       </div>
     )
@@ -697,6 +697,8 @@ export default function Leads() {
                     <Td>
                       {isOverdue(l) ? (
                         <Badge tone="red">Vencido</Badge>
+                      ) : nextStepStatus(l, today) === 'today' || nextStepStatus(l, today) === 'soon' ? (
+                        <Badge tone="amber">{l.nextFollowUpDate === today ? 'Vence hoy' : `Vence pronto · ${l.nextFollowUpDate}`}</Badge>
                       ) : l.nextFollowUpDate ? (
                         <span className="text-slate-500">{l.nextFollowUpDate}</span>
                       ) : (

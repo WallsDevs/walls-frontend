@@ -39,6 +39,34 @@ export function suggestContactLevel(contacts: any[] | undefined) {
 
 export const NEEDS_NEXT_STEP = ['prospeccion', 'llamada', 'propuesta']
 
+/** Estado de la fecha de próximo paso: vencido, hoy, pronto (≤ 2 días), ok o sin fecha. Solo aplica a etapas abiertas. */
+export type NextStepStatus = 'overdue' | 'today' | 'soon' | 'ok'
+
+export function nextStepStatus(lead: any, today = new Date().toISOString().slice(0, 10)): NextStepStatus | null {
+  const date = lead?.nextFollowUpDate
+  if (!date) return null
+  if (lead.stage && lead.stage.outcome && lead.stage.outcome !== 'open') return null
+  if (date < today) return 'overdue'
+  if (date === today) return 'today'
+  const days = Math.round((Date.parse(date) - Date.parse(today)) / 86400000)
+  return days <= 2 ? 'soon' : 'ok'
+}
+
+export function nextStepLabel(status: NextStepStatus | null, date: string) {
+  if (status === 'overdue') return `Venció ${date}`
+  if (status === 'today') return 'Vence hoy'
+  if (status === 'soon') return `Vence pronto · ${date}`
+  return `Próximo paso ${date}`
+}
+
+/** Colores por estado: texto, borde de card y fondo/borde del input. */
+export const NEXT_STEP_STYLES: Record<NextStepStatus, { text: string; border: string; field: string; badge: 'red' | 'amber' | 'blue' | 'gray' }> = {
+  overdue: { text: 'text-red-600', border: 'border-red-300', field: 'border-red-300 bg-red-50 text-red-700', badge: 'red' },
+  today: { text: 'text-amber-600', border: 'border-amber-300', field: 'border-amber-300 bg-amber-50 text-amber-800', badge: 'amber' },
+  soon: { text: 'text-amber-600', border: 'border-amber-200', field: 'border-amber-300 bg-amber-50 text-amber-800', badge: 'amber' },
+  ok: { text: 'text-slate-400', border: 'border-slate-200', field: '', badge: 'gray' },
+}
+
 export type StageNeed = 'closeReason' | 'nextFollowUpDate'
 
 const isBlank = (v: unknown) => v === null || v === undefined || v === ''

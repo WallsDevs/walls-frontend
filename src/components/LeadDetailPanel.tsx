@@ -19,9 +19,10 @@ import {
 import { api, rest } from '../lib/api'
 import { fmtDate } from '../lib/format'
 import { CLOSE_REASON_LABELS, CONTACT_LEVEL_LABELS, LEAD_ACTIVITY_KIND_LABELS, PRIORITY_LABELS } from '../lib/labels'
-import { CONTACT_LEVEL_HINTS, suggestContactLevel } from '../lib/leadRules'
+import { CONTACT_LEVEL_HINTS, NEXT_STEP_STYLES, nextStepLabel, nextStepStatus, suggestContactLevel } from '../lib/leadRules'
 import { useStageChange } from './StageChangeDialog'
-import { Badge, Button, Card, ColorBadge, ConfirmDialog, CONTACT_LEVEL_TONES, ErrorNote, Field, Input, Modal, PageLoader, Select, Textarea } from './ui'
+import { RichText, RichTextarea } from './RichText'
+import { Badge, Button, Card, ColorBadge, ConfirmDialog, CONTACT_LEVEL_TONES, cx, ErrorNote, Field, Input, Modal, PageLoader, Select } from './ui'
 
 const ACTIVITY_ICONS: Record<string, any> = {
   mensaje_enviado: Send,
@@ -34,19 +35,22 @@ const ACTIVITY_ICONS: Record<string, any> = {
 
 const emptyActivity = () => ({ kind: 'nota', description: '', date: new Date().toISOString().slice(0, 10) })
 
-function ActivityModal({ open, onClose, leadId }: { open: boolean; onClose: () => void; leadId: string }) {
+/** Crear o editar una actividad. Si `activity` viene, edita esa (PUT); si no, crea una nueva. */
+function ActivityModal({ open, onClose, leadId, activity }: { open: boolean; onClose: () => void; leadId: string; activity?: any | null }) {
   const qc = useQueryClient()
   const [form, setForm] = useState<any>(emptyActivity())
 
   useEffect(() => {
-    if (open) setForm(emptyActivity())
-  }, [open])
+    if (open) setForm(activity ? { kind: activity.kind || 'nota', description: activity.description || '', date: activity.date || '' } : emptyActivity())
+  }, [open, activity])
 
   const set = (k: string, v: unknown) => setForm((f: any) => ({ ...f, [k]: v }))
 
   const mutation = useMutation({
-    mutationFn: () =>
-      rest.create('lead-activities', { kind: form.kind, date: form.date, description: form.description || null, lead: leadId }),
+    mutationFn: () => {
+      const data = { kind: form.kind, date: form.date, description: form.description || null }
+      return activity ? rest.update('lead-activities', activity.documentId, data) : rest.create('lead-activities', { ...data, lead: leadId })
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lead', leadId] })
       qc.invalidateQueries({ queryKey: ['lead-activities'] })
@@ -58,14 +62,15 @@ function ActivityModal({ open, onClose, leadId }: { open: boolean; onClose: () =
     <Modal
       open={open}
       onClose={onClose}
-      title="Agregar actividad"
+      size="lg"
+      title={activity ? 'Editar actividad' : 'Agregar actividad'}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
           <Button onClick={() => mutation.mutate()} loading={mutation.isPending} disabled={!form.kind || !form.date}>
-            Agregar
+            {activity ? 'Guardar cambios' : 'Agregar'}
           </Button>
         </>
       }
@@ -85,8 +90,8 @@ function ActivityModal({ open, onClose, leadId }: { open: boolean; onClose: () =
             <Input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} />
           </Field>
         </div>
-        <Field label="Nota" hint="Opcional">
-          <Textarea value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Qué pasó en este contacto…" />
+        <Field label="Nota" hint="Opcional. Puedes usar **negrita**, *cursiva* y listas con “- ”; las etiquetas tipo “CONEXIÓN:” se resaltan solas.">
+          <RichTextarea value={form.description} onChange={(v) => set('description', v)} placeholder="Qué pasó en este contacto, o el mensaje que se envió…" />
         </Field>
         {mutation.error ? <ErrorNote error={mutation.error} /> : null}
       </div>
@@ -152,6 +157,8 @@ const formFromLead = (lead: any) => ({
 export default function LeadDetailPanel({ documentId, embedded = false, onDeleted }: { documentId: string; embedded?: boolean; onDeleted?: () => void }) {
   const qc = useQueryClient()
   const [activityModal, setActivityModal] = useState(false)
+  const [editingActivity, setEditingActivity] = useState<any | null>(null)
+  const [deletingActivity, setDeletingActivity] = useState<any | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<any>({})
@@ -233,6 +240,15 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
     },
   })
 
+  // Próximo paso editable desde el encabezado, sin entrar al modo edición.
+  const nextStepMutation = useMutation({
+    mutationFn: (nextFollowUpDate: string) => rest.update('leads', documentId, { nextFollowUpDate: nextFollowUpDate || null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lead', documentId] })
+      qc.invalidateQueries({ queryKey: ['leads'] })
+    },
+  })
+
   const stageChange = useStageChange()
 
   const convertMutation = useMutation({
@@ -240,6 +256,15 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lead', documentId] })
       qc.invalidateQueries({ queryKey: ['clients'] })
+    },
+  })
+
+  const deleteActivityMutation = useMutation({
+    mutationFn: (id: string) => rest.remove('lead-activities', id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lead', documentId] })
+      qc.invalidateQueries({ queryKey: ['lead-activities'] })
+      setDeletingActivity(null)
     },
   })
 
@@ -263,6 +288,8 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
   const suggested = editing ? suggestContactLevel(form.contacts) : null
   const subtitle =
     [primary ? [primary.name, primary.role].filter(Boolean).join(' · ') : '', lead.country].filter(Boolean).join(' · ') || 'Sin contacto asignado'
+  const stepStatus = nextStepStatus(lead)
+  const stepStyle = stepStatus ? NEXT_STEP_STYLES[stepStatus] : null
 
   return (
     <div>
@@ -283,6 +310,19 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
           )}
         </div>
         <div className="flex flex-wrap items-end gap-3">
+          <label className="block">
+            <span className={cx('mb-1 block text-[11px] font-medium uppercase tracking-wide', stepStyle && stepStatus !== 'ok' ? stepStyle.text : 'text-slate-400')}>
+              {stepStatus && stepStatus !== 'ok' ? nextStepLabel(stepStatus, lead.nextFollowUpDate).replace(/ · .*$/, '') : 'Próximo paso'}
+            </span>
+            <Input
+              type="date"
+              value={lead.nextFollowUpDate || ''}
+              onChange={(e) => nextStepMutation.mutate(e.target.value)}
+              className={cx('py-1.5', stepStyle?.field)}
+              style={{ width: '10.5rem' }}
+              title="Fecha del próximo paso con este lead"
+            />
+          </label>
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Urgencia</span>
             <Select value={lead.urgency || ''} onChange={(e) => urgencyMutation.mutate(e.target.value)} className="py-1.5" style={{ width: '8.5rem' }}>
@@ -327,6 +367,11 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
       {urgencyMutation.error ? (
         <div className="mb-4">
           <ErrorNote error={urgencyMutation.error} />
+        </div>
+      ) : null}
+      {nextStepMutation.error ? (
+        <div className="mb-4">
+          <ErrorNote error={nextStepMutation.error} />
         </div>
       ) : null}
       {convertMutation.error ? (
@@ -456,8 +501,8 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
                   ))}
                 </Select>
               </Field>
-              <Field label="Notas">
-                <Textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} />
+              <Field label="Notas" hint="Puedes usar **negrita**, *cursiva* y listas con “- ”.">
+                <RichTextarea value={form.notes} onChange={(v) => set('notes', v)} />
               </Field>
               {saveMutation.error ? <ErrorNote error={saveMutation.error} /> : null}
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
@@ -531,7 +576,14 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
                   ) : null}
                 </ViewRow>
                 <ViewRow label="Próximo paso" empty={!lead.nextFollowUpDate}>
-                  {lead.nextFollowUpDate ? fmtDate(lead.nextFollowUpDate) : null}
+                  {lead.nextFollowUpDate ? (
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      <span className={stepStyle && stepStatus !== 'ok' ? cx('font-medium', stepStyle.text) : undefined}>{fmtDate(lead.nextFollowUpDate)}</span>
+                      {stepStatus === 'overdue' ? <Badge tone="red">Vencido</Badge> : null}
+                      {stepStatus === 'today' ? <Badge tone="amber">Vence hoy</Badge> : null}
+                      {stepStatus === 'soon' ? <Badge tone="amber">Vence pronto</Badge> : null}
+                    </span>
+                  ) : null}
                 </ViewRow>
                 <ViewRow label="Motivo de cierre" empty={!lead.closeReason}>
                   {CLOSE_REASON_LABELS[lead.closeReason]}
@@ -540,7 +592,7 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
                   {lead.lastActivityAt ? fmtDate(lead.lastActivityAt) : null}
                 </ViewRow>
                 <ViewRow label="Notas" empty={!lead.notes}>
-                  <span className="whitespace-pre-line text-slate-700">{lead.notes}</span>
+                  {lead.notes ? <RichText text={lead.notes} /> : null}
                 </ViewRow>
               </div>
               <div className="mt-4 border-t border-slate-100 pt-3">
@@ -571,19 +623,35 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
               {activities.map((a: any) => {
                 const Icon = ACTIVITY_ICONS[a.kind] || MoreHorizontal
                 return (
-                  <div key={a.documentId} className="flex gap-3">
+                  <div key={a.documentId} className="group flex gap-3 rounded-lg p-2 -m-2 hover:bg-slate-50">
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700">
                       <Icon size={14} />
                     </span>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge tone="blue">{LEAD_ACTIVITY_KIND_LABELS[a.kind] ?? a.kind}</Badge>
                         <span className="text-xs text-slate-400">
                           {fmtDate(a.date)}
                           {a.loggedByName ? ` · ${a.loggedByName}` : ''}
                         </span>
+                        <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                          <button
+                            onClick={() => setEditingActivity(a)}
+                            title="Editar actividad"
+                            className="rounded-md p-1 text-slate-400 hover:bg-white hover:text-slate-700"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            onClick={() => setDeletingActivity(a)}
+                            title="Eliminar actividad"
+                            className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </span>
                       </div>
-                      {a.description ? <p className="mt-1 whitespace-pre-line text-sm text-slate-600">{a.description}</p> : null}
+                      {a.description ? <RichText text={a.description} className="mt-1.5" /> : null}
                     </div>
                   </div>
                 )
@@ -595,6 +663,15 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
 
       {stageChange.dialog}
       <ActivityModal open={activityModal} onClose={() => setActivityModal(false)} leadId={documentId} />
+      <ActivityModal open={!!editingActivity} onClose={() => setEditingActivity(null)} leadId={documentId} activity={editingActivity} />
+      <ConfirmDialog
+        open={!!deletingActivity}
+        onClose={() => setDeletingActivity(null)}
+        onConfirm={() => deletingActivity && deleteActivityMutation.mutate(deletingActivity.documentId)}
+        loading={deleteActivityMutation.isPending}
+        title="Eliminar actividad"
+        message={`¿Eliminar esta actividad (${LEAD_ACTIVITY_KIND_LABELS[deletingActivity?.kind] ?? 'actividad'} del ${deletingActivity?.date ? fmtDate(deletingActivity.date) : '—'})?`}
+      />
       <ConfirmDialog
         open={deleting}
         onClose={() => setDeleting(false)}
