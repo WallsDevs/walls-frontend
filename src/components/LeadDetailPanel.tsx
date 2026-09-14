@@ -41,8 +41,16 @@ const localTime = () => {
   const d = new Date()
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
-/** "HH:mm:ss.SSS" de Strapi → "HH:mm" */
-const shortTime = (t: string | null | undefined) => (t ? String(t).slice(0, 5) : '')
+const pad = (n: number) => String(n).padStart(2, '0')
+/** Instante ISO → fecha y hora en la zona del navegador. */
+const localParts = (iso: string) => {
+  const d = new Date(iso)
+  return { date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, time: `${pad(d.getHours())}:${pad(d.getMinutes())}` }
+}
+/** Fecha y hora locales del formulario → instante ISO (UTC). */
+const toInstant = (date: string, time: string) => new Date(`${date}T${time}:00`).toISOString()
+/** Actividad guardada → { date, time } para mostrar. Con `at` se usa la hora local; sin `at` (registros viejos) solo la fecha. */
+const activityWhen = (a: any) => (a?.at ? localParts(a.at) : { date: a?.date || '', time: '' })
 
 const emptyActivity = () => ({ kind: 'nota', description: '', date: localDate(), time: localTime() })
 
@@ -55,7 +63,7 @@ function ActivityModal({ open, onClose, leadId, activity }: { open: boolean; onC
     if (open)
       setForm(
         activity
-          ? { kind: activity.kind || 'nota', description: activity.description || '', date: activity.date || '', time: shortTime(activity.time) }
+          ? { kind: activity.kind || 'nota', description: activity.description || '', ...activityWhen(activity) }
           : emptyActivity(),
       )
   }, [open, activity])
@@ -64,7 +72,14 @@ function ActivityModal({ open, onClose, leadId, activity }: { open: boolean; onC
 
   const mutation = useMutation({
     mutationFn: () => {
-      const data = { kind: form.kind, date: form.date, time: form.time ? `${form.time}:00` : null, description: form.description || null }
+      // Se manda el instante exacto (`at`) más la fecha/hora tal como las ve el usuario en su zona.
+      const data = {
+        kind: form.kind,
+        date: form.date,
+        time: `${form.time}:00`,
+        at: toInstant(form.date, form.time),
+        description: form.description || null,
+      }
       return activity ? rest.update('lead-activities', activity.documentId, data) : rest.create('lead-activities', { ...data, lead: leadId })
     },
     onSuccess: () => {
@@ -299,9 +314,9 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
   if (error || !lead) return <ErrorNote error={error || new Error('Lead no encontrado')} />
 
   // Lo más reciente arriba (por fecha y hora; si empatan, lo último registrado primero).
-  const stamp = (a: any) => `${a.date || ''} ${a.time || ''}`
+  const stamp = (a: any) => (a.at ? new Date(a.at).getTime() : new Date(`${a.date}T12:00:00`).getTime())
   const activities = [...(lead.activities || [])].sort(
-    (a: any, b: any) => stamp(b).localeCompare(stamp(a)) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    (a: any, b: any) => stamp(b) - stamp(a) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
   const canConvert = lead.stage?.outcome === 'won' && !lead.convertedToClient
   const contacts: any[] = lead.contacts || []
@@ -652,8 +667,8 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge tone="blue">{LEAD_ACTIVITY_KIND_LABELS[a.kind] ?? a.kind}</Badge>
                         <span className="text-xs text-slate-400">
-                          {fmtDate(a.date)}
-                          {a.time ? <span className="font-medium text-slate-500"> · {shortTime(a.time)}</span> : null}
+                          {fmtDate(activityWhen(a).date)}
+                          {activityWhen(a).time ? <span className="font-medium text-slate-500"> · {activityWhen(a).time}</span> : null}
                           {a.loggedByName ? ` · ${a.loggedByName}` : ''}
                         </span>
                         <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
@@ -692,7 +707,7 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
         onConfirm={() => deletingActivity && deleteActivityMutation.mutate(deletingActivity.documentId)}
         loading={deleteActivityMutation.isPending}
         title="Eliminar actividad"
-        message={`¿Eliminar esta actividad (${LEAD_ACTIVITY_KIND_LABELS[deletingActivity?.kind] ?? 'actividad'} del ${deletingActivity?.date ? fmtDate(deletingActivity.date) : '—'})?`}
+        message={`¿Eliminar esta actividad (${LEAD_ACTIVITY_KIND_LABELS[deletingActivity?.kind] ?? 'actividad'} del ${deletingActivity ? fmtDate(activityWhen(deletingActivity).date) : '—'})?`}
       />
       <ConfirmDialog
         open={deleting}
