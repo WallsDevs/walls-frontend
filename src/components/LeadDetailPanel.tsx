@@ -279,8 +279,10 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
   if (isLoading) return <PageLoader />
   if (error || !lead) return <ErrorNote error={error || new Error('Lead no encontrado')} />
 
+  // Orden cronológico: el primer contacto arriba y los siguientes debajo, como una conversación.
   const activities = [...(lead.activities || [])].sort(
-    (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    (a: any, b: any) =>
+      new Date(a.date).getTime() - new Date(b.date).getTime() || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
   )
   const canConvert = lead.stage?.outcome === 'won' && !lead.convertedToClient
   const contacts: any[] = lead.contacts || []
