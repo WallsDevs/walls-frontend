@@ -33,7 +33,18 @@ const ACTIVITY_ICONS: Record<string, any> = {
   nota: StickyNote,
 }
 
-const emptyActivity = () => ({ kind: 'nota', description: '', date: new Date().toISOString().slice(0, 10) })
+const localDate = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const localTime = () => {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+/** "HH:mm:ss.SSS" de Strapi → "HH:mm" */
+const shortTime = (t: string | null | undefined) => (t ? String(t).slice(0, 5) : '')
+
+const emptyActivity = () => ({ kind: 'nota', description: '', date: localDate(), time: localTime() })
 
 /** Crear o editar una actividad. Si `activity` viene, edita esa (PUT); si no, crea una nueva. */
 function ActivityModal({ open, onClose, leadId, activity }: { open: boolean; onClose: () => void; leadId: string; activity?: any | null }) {
@@ -41,14 +52,19 @@ function ActivityModal({ open, onClose, leadId, activity }: { open: boolean; onC
   const [form, setForm] = useState<any>(emptyActivity())
 
   useEffect(() => {
-    if (open) setForm(activity ? { kind: activity.kind || 'nota', description: activity.description || '', date: activity.date || '' } : emptyActivity())
+    if (open)
+      setForm(
+        activity
+          ? { kind: activity.kind || 'nota', description: activity.description || '', date: activity.date || '', time: shortTime(activity.time) }
+          : emptyActivity(),
+      )
   }, [open, activity])
 
   const set = (k: string, v: unknown) => setForm((f: any) => ({ ...f, [k]: v }))
 
   const mutation = useMutation({
     mutationFn: () => {
-      const data = { kind: form.kind, date: form.date, description: form.description || null }
+      const data = { kind: form.kind, date: form.date, time: form.time ? `${form.time}:00` : null, description: form.description || null }
       return activity ? rest.update('lead-activities', activity.documentId, data) : rest.create('lead-activities', { ...data, lead: leadId })
     },
     onSuccess: () => {
@@ -69,14 +85,14 @@ function ActivityModal({ open, onClose, leadId, activity }: { open: boolean; onC
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={() => mutation.mutate()} loading={mutation.isPending} disabled={!form.kind || !form.date}>
+          <Button onClick={() => mutation.mutate()} loading={mutation.isPending} disabled={!form.kind || !form.date || !form.time}>
             {activity ? 'Guardar cambios' : 'Agregar'}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_auto_auto]">
           <Field label="Tipo *">
             <Select value={form.kind} onChange={(e) => set('kind', e.target.value)}>
               {Object.entries(LEAD_ACTIVITY_KIND_LABELS).map(([k, v]) => (
@@ -87,7 +103,10 @@ function ActivityModal({ open, onClose, leadId, activity }: { open: boolean; onC
             </Select>
           </Field>
           <Field label="Fecha *">
-            <Input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} />
+            <Input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} style={{ width: '10.5rem' }} />
+          </Field>
+          <Field label="Hora *">
+            <Input type="time" value={form.time} onChange={(e) => set('time', e.target.value)} style={{ width: '7.5rem' }} />
           </Field>
         </div>
         <Field label="Nota" hint="Opcional. Puedes usar **negrita**, *cursiva* y listas con “- ”; las etiquetas tipo “CONEXIÓN:” se resaltan solas.">
@@ -280,9 +299,9 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
   if (error || !lead) return <ErrorNote error={error || new Error('Lead no encontrado')} />
 
   // Orden cronológico: el primer contacto arriba y los siguientes debajo, como una conversación.
+  const stamp = (a: any) => `${a.date || ''} ${a.time || ''}`
   const activities = [...(lead.activities || [])].sort(
-    (a: any, b: any) =>
-      new Date(a.date).getTime() - new Date(b.date).getTime() || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    (a: any, b: any) => stamp(a).localeCompare(stamp(b)) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
   )
   const canConvert = lead.stage?.outcome === 'won' && !lead.convertedToClient
   const contacts: any[] = lead.contacts || []
@@ -634,6 +653,7 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
                         <Badge tone="blue">{LEAD_ACTIVITY_KIND_LABELS[a.kind] ?? a.kind}</Badge>
                         <span className="text-xs text-slate-400">
                           {fmtDate(a.date)}
+                          {a.time ? <span className="font-medium text-slate-500"> · {shortTime(a.time)}</span> : null}
                           {a.loggedByName ? ` · ${a.loggedByName}` : ''}
                         </span>
                         <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
