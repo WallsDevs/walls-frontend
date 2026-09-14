@@ -298,10 +298,10 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
   if (isLoading) return <PageLoader />
   if (error || !lead) return <ErrorNote error={error || new Error('Lead no encontrado')} />
 
-  // Orden cronológico: el primer contacto arriba y los siguientes debajo, como una conversación.
+  // Lo más reciente arriba (por fecha y hora; si empatan, lo último registrado primero).
   const stamp = (a: any) => `${a.date || ''} ${a.time || ''}`
   const activities = [...(lead.activities || [])].sort(
-    (a: any, b: any) => stamp(a).localeCompare(stamp(b)) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    (a: any, b: any) => stamp(b).localeCompare(stamp(a)) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
   const canConvert = lead.stage?.outcome === 'won' && !lead.convertedToClient
   const contacts: any[] = lead.contacts || []
