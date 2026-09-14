@@ -7,6 +7,7 @@ import { todayISO } from '../../lib/format'
 import { useAuth } from '../../auth/AuthContext'
 import { CONTACT_LEVEL_LABELS, PRIORITY_LABELS } from '../../lib/labels'
 import { defaultStage, NEXT_STEP_STYLES, nextStepLabel, nextStepStatus } from '../../lib/leadRules'
+import { usePersistedState } from '../../lib/usePersistedState'
 import { currentWeekKey, weekKey, weekLabel } from '../../lib/weeks'
 import { useStageChange } from '../../components/StageChangeDialog'
 import LeadDetailPanel from '../../components/LeadDetailPanel'
@@ -240,24 +241,53 @@ export function LeadModal({ open, onClose, stages, sources }: { open: boolean; o
 
 type ViewMode = 'list' | 'board'
 
+type LeadFilters = {
+  search: string
+  stageFilter: string
+  sourceFilter: string
+  urgencyFilter: string
+  countryFilter: string
+  levelFilter: string
+  weekFilter: string
+  overdueOnly: boolean
+}
+
+const EMPTY_FILTERS: LeadFilters = {
+  search: '',
+  stageFilter: '',
+  sourceFilter: '',
+  urgencyFilter: '',
+  countryFilter: '',
+  levelFilter: '',
+  weekFilter: '',
+  overdueOnly: false,
+}
+
 export default function Leads() {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const [view, setView] = useState<ViewMode>('board')
-  const [search, setSearch] = useState('')
-  const [stageFilter, setStageFilter] = useState('')
-  const [sourceFilter, setSourceFilter] = useState('')
-  const [urgencyFilter, setUrgencyFilter] = useState('')
-  const [countryFilter, setCountryFilter] = useState('')
-  const [levelFilter, setLevelFilter] = useState('')
-  const [weekFilter, setWeekFilter] = useState('')
-  const [overdueOnly, setOverdueOnly] = useState(false)
+  // Vista y filtros persisten en localStorage para no perderlos al recargar o cambiar de página.
+  const [view, setView] = usePersistedState<ViewMode>('walls_leads_view', 'board')
+  const [filters, setFilters] = usePersistedState<LeadFilters>('walls_leads_filters', EMPTY_FILTERS)
+  const { search, stageFilter, sourceFilter, urgencyFilter, countryFilter, levelFilter, weekFilter, overdueOnly } = filters
+  const patchFilter =
+    <K extends keyof LeadFilters>(k: K) =>
+    (v: LeadFilters[K] | ((prev: LeadFilters[K]) => LeadFilters[K])) =>
+      setFilters((f) => ({ ...f, [k]: typeof v === 'function' ? (v as (prev: LeadFilters[K]) => LeadFilters[K])(f[k]) : v }))
+  const setSearch = patchFilter('search')
+  const setStageFilter = patchFilter('stageFilter')
+  const setSourceFilter = patchFilter('sourceFilter')
+  const setUrgencyFilter = patchFilter('urgencyFilter')
+  const setCountryFilter = patchFilter('countryFilter')
+  const setLevelFilter = patchFilter('levelFilter')
+  const setWeekFilter = patchFilter('weekFilter')
+  const setOverdueOnly = patchFilter('overdueOnly')
   const [modalOpen, setModalOpen] = useState(false)
   const [openLeadId, setOpenLeadId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<any | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [collapsed, setCollapsed] = usePersistedState<Record<string, boolean>>('walls_leads_collapsed', {})
 
   const { data: leads, isLoading } = useQuery({
     queryKey: ['leads'],
@@ -340,16 +370,7 @@ export default function Leads() {
 
   const overdueCount = (leads || []).filter(isOverdue).length
   const hasActiveFilters = !!(search || stageFilter || sourceFilter || urgencyFilter || countryFilter || levelFilter || weekFilter || overdueOnly)
-  const clearFilters = () => {
-    setSearch('')
-    setStageFilter('')
-    setSourceFilter('')
-    setUrgencyFilter('')
-    setCountryFilter('')
-    setLevelFilter('')
-    setWeekFilter('')
-    setOverdueOnly(false)
-  }
+  const clearFilters = () => setFilters(EMPTY_FILTERS)
 
   const boardColumns: any[] = stages || []
   const entryStageId = defaultStage(boardColumns)?.documentId
