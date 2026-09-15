@@ -3,18 +3,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trash2 } from 'lucide-react'
 import { rest } from '../lib/api'
 import { fmtDate, hours, todayISO } from '../lib/format'
-import { PRIORITY_LABELS, TASK_STATUS_LABELS } from '../lib/labels'
-import { Badge, Button, ConfirmDialog, Field, Input, Modal, Select, Textarea, ErrorNote } from './ui'
+import { devName, PRIORITY_LABELS, TASK_KIND_LABELS, TASK_STATUS_LABELS, taskAssignees } from '../lib/labels'
+import { Badge, Button, ConfirmDialog, Field, Input, Modal, MultiSelectChips, Select, Textarea, ErrorNote } from './ui'
 import AttachmentsField, { type Attachment } from './AttachmentsField'
+import MeetingLogForm from './MeetingLogForm'
 
 const emptyForm = {
   title: '',
+  kind: 'tarea',
   description: '',
   status: 'todo',
   priority: 'medium',
   estimateHours: '',
   dueDate: '',
-  assignee: '',
+  assignees: [] as string[],
   project: '',
 }
 
@@ -76,12 +78,13 @@ export default function TaskModal({
     if (task) {
       setForm({
         title: task.title || '',
+        kind: task.kind || 'tarea',
         description: task.description || '',
         status: task.status || 'todo',
         priority: task.priority || 'medium',
         estimateHours: task.estimateHours ?? '',
         dueDate: task.dueDate || '',
-        assignee: task.assignee?.documentId || '',
+        assignees: taskAssignees(task).map((a) => a.documentId),
         project: task.project?.documentId || projectId || '',
       })
     } else {
@@ -108,12 +111,13 @@ export default function TaskModal({
     mutationFn: async () => {
       const data: any = {
         title: form.title,
+        kind: form.kind || 'tarea',
         description: form.description || null,
         status: form.status,
         priority: form.priority,
         estimateHours: form.estimateHours === '' ? null : Number(form.estimateHours),
         dueDate: form.dueDate || null,
-        assignee: form.assignee || null,
+        assignees: form.assignees,
         project: effectiveProject,
         attachments: attachments.map((a) => a.id),
       }
@@ -145,6 +149,7 @@ export default function TaskModal({
         hours: Number(entry.hours),
         description: entry.description || null,
         billed: false,
+        kind: 'trabajo',
       }),
     onSuccess: () => {
       invalidate()
@@ -153,13 +158,47 @@ export default function TaskModal({
   })
 
   const totalLogged = (entries || []).reduce((s: number, e: any) => s + Number(e.hours || 0), 0)
+  const meetingLogged = (entries || []).filter((e: any) => e.kind === 'reunion').reduce((s: number, e: any) => s + Number(e.hours || 0), 0)
+
+  // Developers elegibles (equipo activo del proyecto) y los ya asignados, con nombre.
+  const teamOptions = (team || [])
+    .filter((a: any) => a.developer && a.active !== false)
+    .map((a: any) => ({ value: a.developer.documentId, label: devName(a.developer), hint: a.role }))
+  const assignedPeople = (form.assignees as string[])
+    .map((id) => {
+      const opt = teamOptions.find((o: any) => o.value === id)
+      const fromTask = task ? taskAssignees(task).find((a) => a.documentId === id) : null
+      return { documentId: id, name: opt?.label || fromTask?.name || id }
+    })
+  const savedAssignees = task ? taskAssignees(task) : []
+  const isMeeting = form.kind === 'reunion'
+
+  // Horas agrupadas: las de una misma reunión van juntas.
+  const entryGroups = (() => {
+    const groups: { key: string; meeting: boolean; date: string; description: string | null; items: any[] }[] = []
+    const byGroup = new Map<string, (typeof groups)[number]>()
+    for (const e of entries || []) {
+      if (e.kind === 'reunion' && e.meetingGroup) {
+        let g = byGroup.get(e.meetingGroup)
+        if (!g) {
+          g = { key: e.meetingGroup, meeting: true, date: e.date, description: e.description, items: [] }
+          byGroup.set(e.meetingGroup, g)
+          groups.push(g)
+        }
+        g.items.push(e)
+      } else {
+        groups.push({ key: e.documentId, meeting: false, date: e.date, description: e.description, items: [e] })
+      }
+    }
+    return groups
+  })()
 
   return (
     <>
       <Modal
         open={open}
         onClose={onClose}
-        title={task ? 'Editar tarea' : 'Nueva tarea'}
+        title={task ? (isMeeting ? 'Editar reunión' : 'Editar tarea') : isMeeting ? 'Nueva reunión' : 'Nueva tarea'}
         wide
         footer={
           <>
@@ -194,9 +233,24 @@ export default function TaskModal({
               </Select>
             </Field>
           )}
-          <Field label="Título *">
-            <Input value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="Integrar pasarela de pagos" />
-          </Field>
+          <div className="grid grid-cols-[9rem_1fr] gap-3">
+            <Field label="Tipo">
+              <Select value={form.kind} onChange={(e) => set('kind', e.target.value)}>
+                {Object.entries(TASK_KIND_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Título *">
+              <Input
+                value={form.title}
+                onChange={(e) => set('title', e.target.value)}
+                placeholder={isMeeting ? 'Daily, revisión de sprint, kickoff…' : 'Integrar pasarela de pagos'}
+              />
+            </Field>
+          </div>
           <Field label="Descripción">
             <Textarea value={form.description} onChange={(e) => set('description', e.target.value)} />
           </Field>
@@ -226,18 +280,18 @@ export default function TaskModal({
               <Input type="date" value={form.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
             </Field>
           </div>
-          <Field label="Asignada a" hint={!effectiveProject ? 'Escoge primero el proyecto' : undefined}>
-            <Select value={form.assignee} onChange={(e) => set('assignee', e.target.value)} disabled={!effectiveProject}>
-              <option value="">Sin asignar</option>
-              {(team || [])
-                .filter((a: any) => a.developer)
-                .map((a: any) => (
-                  <option key={a.developer.documentId} value={a.developer.documentId}>
-                    {a.developer.firstName} {a.developer.lastName} · {a.role}
-                  </option>
-                ))}
-            </Select>
-          </Field>
+          <div>
+            <p className="mb-1.5 text-sm font-medium text-slate-700">{isMeeting ? 'Participantes' : 'Asignados'}</p>
+            <MultiSelectChips
+              options={teamOptions}
+              value={form.assignees}
+              onChange={(v) => set('assignees', v)}
+              disabled={!effectiveProject}
+              placeholder={effectiveProject ? 'Agregar developer…' : 'Escoge primero el proyecto'}
+              emptyText="Sin asignar"
+            />
+            <p className="mt-1 text-xs text-slate-400">Solo aparece el equipo con asignación activa en el proyecto.</p>
+          </div>
 
           <Field label="Imágenes">
             <AttachmentsField value={attachments} onChange={setAttachments} />
@@ -249,26 +303,62 @@ export default function TaskModal({
             <div className="rounded-xl border border-slate-200">
               <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Horas registradas</h3>
-                <span className="text-xs font-semibold text-slate-700">{hours(totalLogged)}</span>
+                <span className="text-xs font-semibold text-slate-700">
+                  {hours(totalLogged)}
+                  {meetingLogged > 0 ? <span className="ml-1.5 font-normal text-violet-600">· {hours(meetingLogged)} en reuniones</span> : null}
+                </span>
               </div>
-              <ul className="max-h-44 divide-y divide-slate-100 overflow-y-auto">
-                {(entries || []).map((e: any) => (
-                  <li key={e.documentId} className="flex items-center gap-3 px-4 py-2 text-sm">
-                    <span className="w-20 shrink-0 text-xs text-slate-400">{fmtDate(e.date)}</span>
-                    <span className="min-w-0 flex-1 truncate text-slate-600">
-                      {e.developer ? `${e.developer.firstName} ${e.developer.lastName}` : '—'}
-                      {e.description ? ` · ${e.description}` : ''}
-                    </span>
-                    <span className="shrink-0 font-medium">{hours(e.hours)}</span>
-                    {e.billed ? <Badge tone="green">Facturada</Badge> : null}
-                  </li>
-                ))}
+              <ul className="max-h-56 divide-y divide-slate-100 overflow-y-auto">
+                {entryGroups.map((g) =>
+                  g.meeting ? (
+                    <li key={g.key} className="px-4 py-2 text-sm">
+                      <div className="flex items-center gap-3">
+                        <span className="w-20 shrink-0 text-xs text-slate-400">{fmtDate(g.date)}</span>
+                        <span className="min-w-0 flex-1 truncate text-slate-700">
+                          <Badge tone="violet">Reunión</Badge>
+                          <span className="ml-1.5">
+                            {g.items.length} {g.items.length === 1 ? 'persona' : 'personas'} × {hours(g.items[0].hours)}
+                          </span>
+                          {g.description ? <span className="text-slate-500"> · {g.description}</span> : null}
+                        </span>
+                        <span className="shrink-0 font-medium">{hours(g.items.reduce((s: number, e: any) => s + Number(e.hours || 0), 0))}</span>
+                        {g.items.every((e: any) => e.billed) ? <Badge tone="green">Facturada</Badge> : null}
+                      </div>
+                      <p className="mt-0.5 pl-[5.75rem] text-xs text-slate-400">{g.items.map((e: any) => devName(e.developer)).join(', ')}</p>
+                    </li>
+                  ) : (
+                    g.items.map((e: any) => (
+                      <li key={e.documentId} className="flex items-center gap-3 px-4 py-2 text-sm">
+                        <span className="w-20 shrink-0 text-xs text-slate-400">{fmtDate(e.date)}</span>
+                        <span className="min-w-0 flex-1 truncate text-slate-600">
+                          {e.developer ? devName(e.developer) : '—'}
+                          {e.description ? ` · ${e.description}` : ''}
+                        </span>
+                        <span className="shrink-0 font-medium">{hours(e.hours)}</span>
+                        {e.billed ? <Badge tone="green">Facturada</Badge> : null}
+                      </li>
+                    ))
+                  ),
+                )}
                 {!(entries || []).length && (
                   <li className="px-4 py-4 text-center text-xs text-slate-400">Sin horas registradas.</li>
                 )}
               </ul>
+              {isMeeting || savedAssignees.length > 1 ? (
+                <div className="border-t border-slate-200 bg-violet-50/60 p-3">
+                  <p className="mb-2 text-xs font-medium text-violet-700">Registrar reunión para varios participantes</p>
+                  <MeetingLogForm
+                    endpoint={`/tasks/${task.documentId}/meeting`}
+                    participants={savedAssignees}
+                    invalidateKeys={[['task-entries'], ['project-entries'], ['project'], ['projects'], ['dashboard'], ['tasks']]}
+                  />
+                  {savedAssignees.length !== assignedPeople.length ? (
+                    <p className="mt-2 text-[11px] text-slate-400">Guarda los cambios de asignados para que aparezcan como participantes.</p>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="border-t border-slate-200 bg-slate-50 p-3">
-                <p className="mb-2 text-xs font-medium text-slate-500">Registrar horas (como admin)</p>
+                <p className="mb-2 text-xs font-medium text-slate-500">{isMeeting ? 'Registrar horas a una sola persona' : 'Registrar horas (como admin)'}</p>
                 <div className="grid gap-2 sm:grid-cols-[1fr_120px_80px_auto]">
                   <Select value={entry.developer} onChange={(e) => setEntry({ ...entry, developer: e.target.value })}>
                     <option value="">Developer…</option>
@@ -276,7 +366,7 @@ export default function TaskModal({
                       .filter((a: any) => a.developer)
                       .map((a: any) => (
                         <option key={a.developer.documentId} value={a.developer.documentId}>
-                          {a.developer.firstName} {a.developer.lastName}
+                          {devName(a.developer)}
                         </option>
                       ))}
                   </Select>

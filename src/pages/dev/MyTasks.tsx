@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Clock3, ListTodo, Plus } from 'lucide-react'
+import { Clock3, ListTodo, Plus, Users } from 'lucide-react'
 import { api } from '../../lib/api'
 import { fmtDate, hours, todayISO } from '../../lib/format'
 import { PRIORITY_LABELS, TASK_STATUS_LABELS } from '../../lib/labels'
+import MeetingLogForm from '../../components/MeetingLogForm'
 import {
+  AvatarStack,
   Badge,
   Button,
   Card,
@@ -75,9 +77,27 @@ function LogHoursModal({ task, onClose }: { task: any | null; onClose: () => voi
   )
 }
 
+/** Registrar una reunión desde el portal: el participante la registra una vez para todos. */
+function MeetingModal({ task, onClose }: { task: any | null; onClose: () => void }) {
+  return (
+    <Modal open={!!task} onClose={onClose} title={`Registrar reunión · ${task?.title || ''}`} size="lg">
+      {task ? (
+        <MeetingLogForm
+          endpoint={`/me/tasks/${task.documentId}/meeting`}
+          participants={task.assignees || []}
+          invalidateKeys={[['me-tasks'], ['me-entries']]}
+          onSaved={onClose}
+          compact
+        />
+      ) : null}
+    </Modal>
+  )
+}
+
 export default function MyTasks() {
   const qc = useQueryClient()
   const [logging, setLogging] = useState<any | null>(null)
+  const [meeting, setMeeting] = useState<any | null>(null)
   const [showDone, setShowDone] = useState(false)
   const [creating, setCreating] = useState(false)
 
@@ -143,10 +163,23 @@ export default function MyTasks() {
                 {g.tasks.map((t: any) => (
                   <li key={t.documentId} className="flex flex-wrap items-center gap-3 px-5 py-3">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-slate-900">{t.title}</p>
+                      <p className="font-medium text-slate-900">
+                        {t.title}
+                        {t.kind === 'reunion' ? (
+                          <span className="ml-2 align-middle">
+                            <Badge tone="violet">Reunión</Badge>
+                          </span>
+                        ) : null}
+                      </p>
                       {t.description ? <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{t.description}</p> : null}
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         <Badge tone={PRIORITY_TONES[t.priority] || 'gray'}>{PRIORITY_LABELS[t.priority]}</Badge>
+                        {(t.assignees || []).length > 1 ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                            <AvatarStack people={t.assignees} />
+                            {t.assignees.length} personas
+                          </span>
+                        ) : null}
                         <span className="inline-flex items-center gap-1 text-xs text-slate-400">
                           <Clock3 size={12} />
                           {hours(t.myHours)}
@@ -171,7 +204,12 @@ export default function MyTasks() {
                           </option>
                         ))}
                       </Select>
-                      <Button size="sm" icon={Clock3} onClick={() => setLogging(t)}>
+                      {t.kind === 'reunion' || (t.assignees || []).length > 1 ? (
+                        <Button size="sm" icon={Users} onClick={() => setMeeting(t)}>
+                          Registrar reunión
+                        </Button>
+                      ) : null}
+                      <Button size="sm" variant={t.kind === 'reunion' ? 'secondary' : 'primary'} icon={Clock3} onClick={() => setLogging(t)}>
                         Registrar horas
                       </Button>
                     </div>
@@ -184,6 +222,7 @@ export default function MyTasks() {
       )}
 
       <LogHoursModal task={logging} onClose={() => setLogging(null)} />
+      <MeetingModal task={meeting} onClose={() => setMeeting(null)} />
       <NewTaskModal open={creating} onClose={() => setCreating(false)} />
     </div>
   )

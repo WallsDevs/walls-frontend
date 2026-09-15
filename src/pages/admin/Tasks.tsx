@@ -3,8 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { LayoutGrid, List, ListTodo, Plus } from 'lucide-react'
 import { rest } from '../../lib/api'
 import { fmtDate } from '../../lib/format'
-import { PRIORITY_LABELS, TASK_STATUS_LABELS, TASK_STATUS_ORDER } from '../../lib/labels'
+import { PRIORITY_LABELS, TASK_STATUS_LABELS, TASK_STATUS_ORDER, taskAssignees } from '../../lib/labels'
 import {
+  AvatarStack,
   Badge,
   Button,
   EmptyState,
@@ -34,7 +35,7 @@ export default function Tasks() {
     queryKey: ['tasks', 'all'],
     queryFn: () =>
       rest.list('tasks', {
-        populate: { project: true, assignee: true, attachments: true },
+        populate: { project: true, assignee: true, assignees: true, attachments: true },
         sort: 'createdAt:desc',
         pagination: { pageSize: 300 },
       }),
@@ -143,7 +144,7 @@ export default function Tasks() {
               <tr>
                 <Th>Tarea</Th>
                 <Th>Proyecto</Th>
-                <Th>Asignada a</Th>
+                <Th>Asignados</Th>
                 <Th>Prioridad</Th>
                 <Th>Vence</Th>
                 <Th>Estado</Th>
@@ -164,9 +165,10 @@ export default function Tasks() {
                     <span className="text-slate-600">{t.project?.name || '—'}</span>
                   </Td>
                   <Td>
-                    {t.assignee ? (
-                      <span className="text-slate-600">
-                        {t.assignee.firstName} {t.assignee.lastName}
+                    {taskAssignees(t).length ? (
+                      <span className="inline-flex items-center gap-2 text-slate-600">
+                        <AvatarStack people={taskAssignees(t)} />
+                        <span className="truncate">{taskAssignees(t).length === 1 ? taskAssignees(t)[0].name : `${taskAssignees(t).length} personas`}</span>
                       </span>
                     ) : (
                       <span className="text-slate-400">Sin asignar</span>
@@ -230,15 +232,8 @@ export default function Tasks() {
                       ) : null}
                       <div className="flex flex-wrap items-center gap-1.5">
                         <Badge tone={PRIORITY_TONES[t.priority] || 'gray'}>{PRIORITY_LABELS[t.priority]}</Badge>
-                        {t.assignee ? (
-                          <span
-                            title={`${t.assignee.firstName} ${t.assignee.lastName}`}
-                            className="ml-auto flex size-6 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
-                          >
-                            {t.assignee.firstName[0]}
-                            {t.assignee.lastName[0]}
-                          </span>
-                        ) : null}
+                        {t.kind === 'reunion' ? <Badge tone="violet">Reunión</Badge> : null}
+                        <AvatarStack people={taskAssignees(t)} className="ml-auto" />
                       </div>
                       {t.status === 'done' && t.completedAt ? (
                         <p className="mt-1.5 text-xs text-emerald-600">Completada {fmtDate(t.completedAt)}</p>

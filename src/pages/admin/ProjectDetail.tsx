@@ -16,8 +16,9 @@ import {
 } from 'lucide-react'
 import { rest } from '../../lib/api'
 import { fmtDate, hours, money, monthStartISO } from '../../lib/format'
-import { BILLING_TYPE_LABELS, PROJECT_STATUS_LABELS, PRIORITY_LABELS, TASK_STATUS_LABELS, TASK_STATUS_ORDER } from '../../lib/labels'
+import { BILLING_TYPE_LABELS, PROJECT_STATUS_LABELS, PRIORITY_LABELS, TASK_STATUS_LABELS, TASK_STATUS_ORDER, taskAssignees } from '../../lib/labels'
 import {
+  AvatarStack,
   Badge,
   Button,
   Card,
@@ -72,7 +73,7 @@ export default function ProjectDetail() {
     queryFn: () =>
       rest.list('tasks', {
         filters: { project: { documentId: { $eq: documentId } } },
-        populate: { assignee: true, attachments: true },
+        populate: { assignee: true, assignees: true, attachments: true },
         sort: 'createdAt:desc',
         pagination: { pageSize: 200 },
       }),
@@ -338,15 +339,8 @@ export default function ProjectDetail() {
                             {hours(hoursByTask[t.documentId] || 0)}
                             {t.estimateHours ? ` / ${hours(t.estimateHours)}` : ''}
                           </span>
-                          {t.assignee ? (
-                            <span
-                              title={`${t.assignee.firstName} ${t.assignee.lastName}`}
-                              className="ml-auto flex size-6 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700"
-                            >
-                              {t.assignee.firstName[0]}
-                              {t.assignee.lastName[0]}
-                            </span>
-                          ) : null}
+                          {t.kind === 'reunion' ? <Badge tone="violet">Reunión</Badge> : null}
+                          <AvatarStack people={taskAssignees(t)} className="ml-auto" />
                         </div>
                         {t.status === 'done' && t.completedAt ? (
                           <p className="mt-1.5 text-xs text-emerald-600">Completada {fmtDate(t.completedAt)}</p>
@@ -376,6 +370,11 @@ export default function ProjectDetail() {
                 </option>
               ))}
             </Select>
+            {filteredEntries.some((e: any) => e.kind === 'reunion') ? (
+              <span className="text-xs text-violet-600">
+                {hours(filteredEntries.filter((e: any) => e.kind === 'reunion').reduce((s: number, e: any) => s + Number(e.hours || 0), 0))} en reuniones
+              </span>
+            ) : null}
             <button onClick={() => setMonth('')} className="text-xs text-brand-600 hover:underline">
               Ver todo el histórico
             </button>
@@ -399,7 +398,12 @@ export default function ProjectDetail() {
                 <tr key={e.documentId} className="hover:bg-slate-50">
                   <Td className="whitespace-nowrap">{fmtDate(e.date)}</Td>
                   <Td>{e.developer ? `${e.developer.firstName} ${e.developer.lastName}` : '—'}</Td>
-                  <Td>{e.task?.title || '—'}</Td>
+                  <Td>
+                    {e.task?.title || '—'}
+                    {e.kind === 'reunion' ? (
+                      <Badge tone="violet">Reunión</Badge>
+                    ) : null}
+                  </Td>
                   <Td className="max-w-64 truncate text-slate-500">{e.description || '—'}</Td>
                   <Td right className="font-medium">{hours(e.hours)}</Td>
                   <Td>{e.billed ? <Badge tone="green">Facturada</Badge> : <Badge tone="gray">Sin facturar</Badge>}</Td>

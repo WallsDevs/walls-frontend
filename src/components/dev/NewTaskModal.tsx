@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api'
-import { PRIORITY_LABELS } from '../../lib/labels'
+import { PRIORITY_LABELS, TASK_KIND_LABELS } from '../../lib/labels'
 import { Button, ErrorNote, Field, Input, Modal, Select, Textarea } from '../ui'
 
-const emptyForm = { project: '', title: '', description: '', priority: 'medium', estimateHours: '', dueDate: '' }
+const emptyForm = { project: '', kind: 'tarea', title: '', description: '', priority: 'medium', estimateHours: '', dueDate: '' }
 
 export default function NewTaskModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient()
@@ -28,6 +28,7 @@ export default function NewTaskModal({ open, onClose }: { open: boolean; onClose
         method: 'POST',
         body: {
           project: form.project,
+          kind: form.kind,
           title: form.title,
           description: form.description || undefined,
           priority: form.priority,
@@ -68,9 +69,25 @@ export default function NewTaskModal({ open, onClose }: { open: boolean; onClose
             ))}
           </Select>
         </Field>
-        <Field label="Título *">
-          <Input value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="¿Qué hay que hacer?" autoFocus />
-        </Field>
+        <div className="grid grid-cols-[9rem_1fr] gap-3">
+          <Field label="Tipo">
+            <Select value={form.kind} onChange={(e) => set('kind', e.target.value)}>
+              {Object.entries(TASK_KIND_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Título *">
+            <Input
+              value={form.title}
+              onChange={(e) => set('title', e.target.value)}
+              placeholder={form.kind === 'reunion' ? 'Daily, revisión de sprint…' : '¿Qué hay que hacer?'}
+              autoFocus
+            />
+          </Field>
+        </div>
         <Field label="Descripción">
           <Textarea value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Detalles, contexto…" />
         </Field>
@@ -91,7 +108,10 @@ export default function NewTaskModal({ open, onClose }: { open: boolean; onClose
             <Input type="date" value={form.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
           </Field>
         </div>
-        <p className="text-xs text-slate-400">Se crea asignada a ti, con estado "Por hacer".</p>
+        <p className="text-xs text-slate-400">
+          Se crea asignada a ti, con estado "Por hacer".
+          {form.kind === 'reunion' ? ' Un admin puede agregar a los demás participantes desde el panel.' : ''}
+        </p>
         {mutation.error ? <ErrorNote error={mutation.error} /> : null}
       </div>
     </Modal>

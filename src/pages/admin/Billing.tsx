@@ -244,6 +244,9 @@ function UnbilledTab() {
                     </Td>
                     <Td right>
                       {hours(includeCarryOver ? r.hours : r.hoursInPeriod)}
+                      {r.meetingHours > 0 ? (
+                        <span className="block text-[10px] text-violet-600">{hours(r.meetingHours)} en reuniones</span>
+                      ) : null}
                       {r.billingType === 'fixed' ? (
                         <span className="block text-[10px] text-slate-400">referencia</span>
                       ) : r.hoursCarried > 0 ? (

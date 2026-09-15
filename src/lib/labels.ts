@@ -27,6 +27,20 @@ export const TASK_STATUS_LABELS: Record<string, string> = {
 
 export const TASK_STATUS_ORDER = ['todo', 'in_progress', 'review', 'done'] as const
 
+export const TASK_KIND_LABELS: Record<string, string> = {
+  tarea: 'Tarea',
+  reunion: 'Reunión',
+}
+
+/** Nombre completo de un developer tal como viene del API (firstName/lastName) o del portal (name). */
+export const devName = (d: any) => (d?.name ? d.name : d ? `${d.firstName || ''} ${d.lastName || ''}`.trim() : '')
+
+/** Asignados de una tarea, tolerando registros viejos con un solo `assignee`. */
+export const taskAssignees = (t: any): { documentId: string; name: string }[] => {
+  const list = t?.assignees?.length ? t.assignees : t?.assignee ? [t.assignee] : []
+  return list.map((d: any) => ({ documentId: d.documentId, name: devName(d) }))
+}
+
 export const PRIORITY_LABELS: Record<string, string> = {
   low: 'Baja',
   medium: 'Media',

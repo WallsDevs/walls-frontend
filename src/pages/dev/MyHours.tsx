@@ -108,7 +108,8 @@ export default function MyHours() {
       const name = e.project?.name || 'Sin proyecto'
       byProject[name] = (byProject[name] || 0) + Number(e.hours || 0)
     }
-    return { total, byProject: Object.entries(byProject).sort((a, b) => b[1] - a[1]) }
+    const meetings = list.filter((e: any) => e.kind === 'reunion').reduce((s: number, e: any) => s + Number(e.hours || 0), 0)
+    return { total, meetings, byProject: Object.entries(byProject).sort((a, b) => b[1] - a[1]) }
   }, [entries])
 
   if (isLoading) return <PageLoader />
@@ -126,6 +127,7 @@ export default function MyHours() {
         <Card className="px-4 py-2.5">
           <span className="text-xs text-slate-500">Total del período: </span>
           <span className="font-semibold text-slate-900">{hours(totals.total)}</span>
+          {totals.meetings > 0 ? <span className="ml-2 text-xs text-violet-600">{hours(totals.meetings)} en reuniones</span> : null}
         </Card>
         {totals.byProject.map(([name, h]) => (
           <span key={name} className="rounded-full bg-white px-3 py-1.5 text-xs text-slate-600 shadow-sm ring-1 ring-slate-200">
@@ -154,7 +156,12 @@ export default function MyHours() {
               <tr key={e.documentId} className="hover:bg-slate-50">
                 <Td className="whitespace-nowrap">{fmtDate(e.date)}</Td>
                 <Td>{e.project?.name || '—'}</Td>
-                <Td>{e.task?.title || '—'}</Td>
+                <Td>
+                  {e.task?.title || '—'}
+                  {e.kind === 'reunion' ? (
+                    <Badge tone="violet">Reunión</Badge>
+                  ) : null}
+                </Td>
                 <Td className="max-w-56 truncate text-slate-500">{e.description || '—'}</Td>
                 <Td right className="font-medium">{hours(e.hours)}</Td>
                 <Td>{e.billed ? <Badge tone="green">Facturada</Badge> : <Badge tone="gray">Sin facturar</Badge>}</Td>

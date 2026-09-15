@@ -499,6 +499,95 @@ export function Td({
   )
 }
 
+/* ---------- Avatar stack (varios asignados) ---------- */
+
+export type Person = { documentId?: string; name: string }
+
+/** Iniciales superpuestas de varias personas; "+N" si hay más de `max`. */
+export function AvatarStack({ people, max = 3, size = 'sm', className }: { people: Person[]; max?: number; size?: 'sm' | 'md'; className?: string }) {
+  if (!people.length) return null
+  const shown = people.slice(0, max)
+  const rest = people.length - shown.length
+  const dim = size === 'md' ? 'size-7 text-[11px]' : 'size-6 text-[10px]'
+  return (
+    <span className={cx('inline-flex items-center -space-x-1.5', className)} title={people.map((p) => p.name).join(', ')}>
+      {shown.map((p, i) => (
+        <span
+          key={p.documentId || `${p.name}-${i}`}
+          className={cx('flex shrink-0 items-center justify-center rounded-full bg-brand-100 font-semibold text-brand-700 ring-2 ring-white', dim)}
+        >
+          {p.name
+            .split(' ')
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((x) => x[0])
+            .join('')
+            .toUpperCase()}
+        </span>
+      ))}
+      {rest > 0 ? (
+        <span className={cx('flex shrink-0 items-center justify-center rounded-full bg-slate-200 font-semibold text-slate-600 ring-2 ring-white', dim)}>+{rest}</span>
+      ) : null}
+    </span>
+  )
+}
+
+/* ---------- Multi-select con chips ---------- */
+
+export type ChipOption = { value: string; label: string; hint?: string }
+
+/** Selección múltiple: chips con × para quitar y un select para agregar. Sin dependencias. */
+export function MultiSelectChips({
+  options,
+  value,
+  onChange,
+  placeholder = 'Agregar…',
+  disabled,
+  emptyText,
+}: {
+  options: ChipOption[]
+  value: string[]
+  onChange: (next: string[]) => void
+  placeholder?: string
+  disabled?: boolean
+  emptyText?: string
+}) {
+  const byValue = new Map(options.map((o) => [o.value, o]))
+  const remaining = options.filter((o) => !value.includes(o.value))
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {value.map((v) => (
+          <span key={v} className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700">
+            {byValue.get(v)?.label || v}
+            {!disabled ? (
+              <button type="button" onClick={() => onChange(value.filter((x) => x !== v))} className="text-brand-400 hover:text-brand-700" title="Quitar">
+                ×
+              </button>
+            ) : null}
+          </span>
+        ))}
+        {!value.length && emptyText ? <span className="text-xs text-slate-400">{emptyText}</span> : null}
+      </div>
+      <Select
+        value=""
+        disabled={disabled || !remaining.length}
+        onChange={(e) => {
+          if (e.target.value) onChange([...value, e.target.value])
+        }}
+      >
+        <option value="">{remaining.length ? placeholder : value.length ? 'Todos agregados' : placeholder}</option>
+        {remaining.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+            {o.hint ? ` · ${o.hint}` : ''}
+          </option>
+        ))}
+      </Select>
+    </div>
+  )
+}
+
 /* ---------- Avatar ---------- */
 
 export function Avatar({ name, className }: { name: string; className?: string }) {
