@@ -250,6 +250,8 @@ type LeadFilters = {
   levelFilter: string
   weekFilter: string
   overdueOnly: boolean
+  /** Cuadro del resumen semanal activo: 'captured' | 'won' | tipo de actividad | '' */
+  weekTile: string
 }
 
 const EMPTY_FILTERS: LeadFilters = {
@@ -261,6 +263,7 @@ const EMPTY_FILTERS: LeadFilters = {
   levelFilter: '',
   weekFilter: '',
   overdueOnly: false,
+  weekTile: '',
 }
 
 export default function Leads() {
@@ -268,8 +271,9 @@ export default function Leads() {
   const qc = useQueryClient()
   // Vista y filtros persisten en localStorage para no perderlos al recargar o cambiar de página.
   const [view, setView] = usePersistedState<ViewMode>('walls_leads_view', 'board')
-  const [filters, setFilters] = usePersistedState<LeadFilters>('walls_leads_filters', EMPTY_FILTERS)
-  const { search, stageFilter, sourceFilter, urgencyFilter, countryFilter, levelFilter, weekFilter, overdueOnly } = filters
+  const [storedFilters, setFilters] = usePersistedState<LeadFilters>('walls_leads_filters', EMPTY_FILTERS)
+  const filters: LeadFilters = { ...EMPTY_FILTERS, ...storedFilters } // tolera filtros guardados por versiones anteriores
+  const { search, stageFilter, sourceFilter, urgencyFilter, countryFilter, levelFilter, weekFilter, overdueOnly, weekTile } = filters
   const patchFilter =
     <K extends keyof LeadFilters>(k: K) =>
     (v: LeadFilters[K] | ((prev: LeadFilters[K]) => LeadFilters[K])) =>
@@ -282,6 +286,8 @@ export default function Leads() {
   const setLevelFilter = patchFilter('levelFilter')
   const setWeekFilter = patchFilter('weekFilter')
   const setOverdueOnly = patchFilter('overdueOnly')
+  const setWeekTile = patchFilter('weekTile')
+  const toggleWeekTile = (tile: string) => setWeekTile((v) => (v === tile ? '' : tile))
   const [modalOpen, setModalOpen] = useState(false)
   const [openLeadId, setOpenLeadId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<any | null>(null)
@@ -315,6 +321,7 @@ export default function Leads() {
       rest.listAll('lead-activities', {
         filters: { date: { $gte: weekSince } },
         fields: ['kind', 'date'],
+        populate: { lead: { fields: ['documentId'] } },
       }),
   })
 
@@ -350,9 +357,27 @@ export default function Leads() {
   }, [leads])
   const weekTarget = weekFilter === 'this' ? thisWeek : weekFilter === 'last' ? lastWeek : weekFilter
 
+  // Resumen semanal: conteos y, por cuadro, qué leads están detrás (para filtrar al hacer clic).
+  const weekCounts = useMemo(() => {
+    const byKind: Record<string, number> = {}
+    const leadsByKind: Record<string, Set<string>> = {}
+    for (const a of weekActivities || []) {
+      byKind[a.kind] = (byKind[a.kind] || 0) + 1
+      if (a.lead?.documentId) (leadsByKind[a.kind] ||= new Set()).add(a.lead.documentId)
+    }
+    const wonLeads = new Set<string>((leads || []).filter((l: any) => l.wonAt && String(l.wonAt).slice(0, 10) >= weekSince).map((l: any) => l.documentId))
+    const capturedLeads = new Set<string>(
+      (leads || []).filter((l: any) => (l.capturedAt || String(l.createdAt).slice(0, 10)) >= weekSince).map((l: any) => l.documentId),
+    )
+    return { byKind, leadsByKind, won: wonLeads.size, captured: capturedLeads.size, wonLeads, capturedLeads }
+  }, [weekActivities, leads, weekSince])
+  const weekTileLeads: Set<string> | null =
+    weekTile === 'captured' ? weekCounts.capturedLeads : weekTile === 'won' ? weekCounts.wonLeads : weekTile ? weekCounts.leadsByKind[weekTile] || new Set() : null
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return (leads || []).filter((l: any) => {
+      if (weekTileLeads && !weekTileLeads.has(l.documentId)) return false
       const c = primaryContact(l)
       if (q && !l.companyName.toLowerCase().includes(q) && !(c?.name || '').toLowerCase().includes(q)) return false
       if (stageFilter && l.stage?.documentId !== stageFilter) return false
@@ -364,10 +389,10 @@ export default function Leads() {
       if (overdueOnly && !isOverdue(l)) return false
       return true
     })
-  }, [leads, search, stageFilter, sourceFilter, urgencyFilter, countryFilter, levelFilter, weekTarget, overdueOnly])
+  }, [leads, search, stageFilter, sourceFilter, urgencyFilter, countryFilter, levelFilter, weekTarget, overdueOnly, weekTileLeads])
 
   const overdueCount = (leads || []).filter(isOverdue).length
-  const hasActiveFilters = !!(search || stageFilter || sourceFilter || urgencyFilter || countryFilter || levelFilter || weekFilter || overdueOnly)
+  const hasActiveFilters = !!(search || stageFilter || sourceFilter || urgencyFilter || countryFilter || levelFilter || weekFilter || overdueOnly || weekTile)
   const clearFilters = () => setFilters(EMPTY_FILTERS)
 
   const boardColumns: any[] = stages || []
@@ -375,14 +400,6 @@ export default function Leads() {
   // Las etapas finales (ganado / cerrado) empiezan colapsadas para dejar a la vista las de trabajo.
   const isCollapsed = (s: any) => collapsed[s.documentId] ?? s.outcome !== 'open'
   const toggleCollapsed = (s: any) => setCollapsed((c) => ({ ...c, [s.documentId]: !isCollapsed(s) }))
-
-  const weekCounts = useMemo(() => {
-    const byKind: Record<string, number> = {}
-    for (const a of weekActivities || []) byKind[a.kind] = (byKind[a.kind] || 0) + 1
-    const won = (leads || []).filter((l: any) => l.wonAt && String(l.wonAt).slice(0, 10) >= weekSince).length
-    const captured = (leads || []).filter((l: any) => (l.capturedAt || String(l.createdAt).slice(0, 10)) >= weekSince).length
-    return { byKind, won, captured }
-  }, [weekActivities, leads, weekSince])
 
   // Lista agrupada por semana de captación, de la más reciente a la más antigua.
   const listGroups = useMemo(() => {
@@ -609,21 +626,46 @@ export default function Leads() {
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Leads captados</p>
-          <p className="text-lg font-semibold text-slate-900">{weekCounts.captured}</p>
-        </div>
-        {WEEK_KINDS.map((k) => (
-          <div key={k.kind} className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{k.label}</p>
-            <p className="text-lg font-semibold text-slate-900">{weekCounts.byKind[k.kind] || 0}</p>
-          </div>
-        ))}
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 shadow-sm">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-600">Ganados</p>
-          <p className="text-lg font-semibold text-emerald-700">{weekCounts.won}</p>
-        </div>
-        <p className="col-span-2 -mt-1 text-[11px] text-slate-400 sm:col-span-3 lg:col-span-6">Esta semana · últimos 7 días</p>
+        {[
+          { key: 'captured', label: 'Leads captados', count: weekCounts.captured, tone: 'slate' },
+          ...WEEK_KINDS.map((k) => ({ key: k.kind, label: k.label, count: weekCounts.byKind[k.kind] || 0, tone: 'slate' })),
+          { key: 'won', label: 'Ganados', count: weekCounts.won, tone: 'green' },
+        ].map((t) => {
+          const active = weekTile === t.key
+          const green = t.tone === 'green'
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => toggleWeekTile(t.key)}
+              title={active ? 'Quitar este filtro' : `Ver solo los leads con ${t.label.toLowerCase()} esta semana`}
+              className={cx(
+                'rounded-xl border px-3 py-2 text-left shadow-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400',
+                green
+                  ? active
+                    ? 'border-emerald-500 bg-emerald-100 ring-2 ring-emerald-200'
+                    : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'
+                  : active
+                    ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-100'
+                    : 'border-slate-200 bg-white hover:bg-slate-50',
+              )}
+            >
+              <p className={cx('text-[11px] font-medium uppercase tracking-wide', green ? 'text-emerald-600' : active ? 'text-brand-700' : 'text-slate-400')}>{t.label}</p>
+              <p className={cx('text-lg font-semibold', green ? 'text-emerald-700' : active ? 'text-brand-700' : 'text-slate-900')}>{t.count}</p>
+            </button>
+          )
+        })}
+        <p className="col-span-2 -mt-1 text-[11px] text-slate-400 sm:col-span-3 lg:col-span-6">
+          Esta semana · últimos 7 días · haz clic en un cuadro para ver solo esos leads
+          {weekTile ? (
+            <>
+              {' · '}
+              <button onClick={() => setWeekTile('')} className="font-medium text-brand-600 hover:text-brand-700">
+                Quitar filtro
+              </button>
+            </>
+          ) : null}
+        </p>
       </div>
 
       {stageChange.error && !stageChange.dialogOpen ? (
