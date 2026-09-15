@@ -292,10 +292,9 @@ export default function Leads() {
   const { data: leads, isLoading } = useQuery({
     queryKey: ['leads'],
     queryFn: () =>
-      rest.list('leads', {
+      rest.listAll('leads', {
         populate: { stage: true, source: true, contacts: true },
         sort: 'updatedAt:desc',
-        pagination: { pageSize: 300 },
       }),
   })
 
@@ -313,10 +312,9 @@ export default function Leads() {
   const { data: weekActivities } = useQuery({
     queryKey: ['lead-activities', 'week', weekSince],
     queryFn: () =>
-      rest.list('lead-activities', {
+      rest.listAll('lead-activities', {
         filters: { date: { $gte: weekSince } },
         fields: ['kind', 'date'],
-        pagination: { pageSize: 500 },
       }),
   })
 

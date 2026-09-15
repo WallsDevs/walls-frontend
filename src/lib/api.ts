@@ -88,6 +88,20 @@ export function qs(params: Record<string, unknown>): string {
 export const rest = {
   list: <T = any>(col: string, params: Record<string, unknown> = {}) =>
     api<{ data: T[] }>(`/${col}${qs(params)}`).then((r) => r.data),
+  /** Trae TODAS las filas paginando por detrás (el servidor limita cada página), sin perder ninguna. */
+  listAll: async <T = any>(col: string, params: Record<string, unknown> = {}, pageSize = 100): Promise<T[]> => {
+    const out: T[] = []
+    let page = 1
+    for (;;) {
+      const r = await api<{ data: T[]; meta?: { pagination?: { pageCount?: number } } }>(
+        `/${col}${qs({ ...params, pagination: { page, pageSize } })}`,
+      )
+      out.push(...r.data)
+      const pageCount = r.meta?.pagination?.pageCount ?? 1
+      if (page >= pageCount || r.data.length < pageSize) return out
+      page++
+    }
+  },
   one: <T = any>(col: string, id: string, params: Record<string, unknown> = {}) =>
     api<{ data: T }>(`/${col}/${id}${qs(params)}`).then((r) => r.data),
   create: <T = any>(col: string, data: unknown) =>
