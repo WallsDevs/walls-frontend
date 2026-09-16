@@ -252,7 +252,12 @@ type LeadFilters = {
   overdueOnly: boolean
   /** Cuadro del resumen semanal activo: 'captured' | 'won' | tipo de actividad | '' */
   weekTile: string
+  /** Orden de las cards y filas: 'recent' | 'urgency' | 'nextStep' */
+  sort: string
 }
+
+const URGENCY_RANK: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 }
+const SORT_LABELS: Record<string, string> = { recent: 'Más recientes primero', urgency: 'Mayor urgencia primero', nextStep: 'Próximo paso más cercano' }
 
 const EMPTY_FILTERS: LeadFilters = {
   search: '',
@@ -264,6 +269,7 @@ const EMPTY_FILTERS: LeadFilters = {
   weekFilter: '',
   overdueOnly: false,
   weekTile: '',
+  sort: 'recent',
 }
 
 export default function Leads() {
@@ -273,7 +279,7 @@ export default function Leads() {
   const [view, setView] = usePersistedState<ViewMode>('walls_leads_view', 'board')
   const [storedFilters, setFilters] = usePersistedState<LeadFilters>('walls_leads_filters', EMPTY_FILTERS)
   const filters: LeadFilters = { ...EMPTY_FILTERS, ...storedFilters } // tolera filtros guardados por versiones anteriores
-  const { search, stageFilter, sourceFilter, urgencyFilter, countryFilter, levelFilter, weekFilter, overdueOnly, weekTile } = filters
+  const { search, stageFilter, sourceFilter, urgencyFilter, countryFilter, levelFilter, weekFilter, overdueOnly, weekTile, sort } = filters
   const patchFilter =
     <K extends keyof LeadFilters>(k: K) =>
     (v: LeadFilters[K] | ((prev: LeadFilters[K]) => LeadFilters[K])) =>
@@ -287,6 +293,7 @@ export default function Leads() {
   const setWeekFilter = patchFilter('weekFilter')
   const setOverdueOnly = patchFilter('overdueOnly')
   const setWeekTile = patchFilter('weekTile')
+  const setSort = patchFilter('sort')
   const toggleWeekTile = (tile: string) => setWeekTile((v) => (v === tile ? '' : tile))
   const [modalOpen, setModalOpen] = useState(false)
   const [openLeadId, setOpenLeadId] = useState<string | null>(null)
@@ -376,7 +383,7 @@ export default function Leads() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
-    return (leads || []).filter((l: any) => {
+    const list = (leads || []).filter((l: any) => {
       if (weekTileLeads && !weekTileLeads.has(l.documentId)) return false
       const c = primaryContact(l)
       if (q && !l.companyName.toLowerCase().includes(q) && !(c?.name || '').toLowerCase().includes(q)) return false
@@ -389,7 +396,18 @@ export default function Leads() {
       if (overdueOnly && !isOverdue(l)) return false
       return true
     })
-  }, [leads, search, stageFilter, sourceFilter, urgencyFilter, countryFilter, levelFilter, weekTarget, overdueOnly, weekTileLeads])
+    const recent = (l: any) => String(l.capturedAt || l.createdAt || '')
+    if (sort === 'urgency') {
+      // Urgente → Alta → Media → Baja; a igual urgencia, el más reciente primero.
+      list.sort((a, b) => (URGENCY_RANK[a.urgency] ?? 9) - (URGENCY_RANK[b.urgency] ?? 9) || recent(b).localeCompare(recent(a)))
+    } else if (sort === 'nextStep') {
+      // Con fecha de próximo paso primero (la más cercana arriba); sin fecha al final.
+      list.sort((a, b) => (a.nextFollowUpDate ? 0 : 1) - (b.nextFollowUpDate ? 0 : 1) || String(a.nextFollowUpDate || '').localeCompare(String(b.nextFollowUpDate || '')))
+    } else {
+      list.sort((a, b) => recent(b).localeCompare(recent(a)))
+    }
+    return list
+  }, [leads, search, stageFilter, sourceFilter, urgencyFilter, countryFilter, levelFilter, weekTarget, overdueOnly, weekTileLeads, sort])
 
   const overdueCount = (leads || []).filter(isOverdue).length
   const hasActiveFilters = !!(search || stageFilter || sourceFilter || urgencyFilter || countryFilter || levelFilter || weekFilter || overdueOnly || weekTile)
@@ -404,8 +422,8 @@ export default function Leads() {
   // Lista agrupada por semana de captación, de la más reciente a la más antigua.
   const listGroups = useMemo(() => {
     const groups = new Map<string, any[]>()
-    const sorted = [...filtered].sort((a, b) => ((a.capturedAt || a.createdAt) < (b.capturedAt || b.createdAt) ? 1 : -1))
-    for (const l of sorted) {
+    // Dentro de cada semana se respeta el orden elegido (reciente / urgencia / próximo paso).
+    for (const l of filtered) {
       const k = leadWeek(l)
       if (!groups.has(k)) groups.set(k, [])
       groups.get(k)!.push(l)
@@ -539,7 +557,7 @@ export default function Leads() {
         <div className="w-full sm:w-52">
           <SearchInput value={search} onChange={setSearch} placeholder="Buscar lead…" />
         </div>
-        <Select value={weekFilter} onChange={(e) => setWeekFilter(e.target.value)} className="w-full sm:w-52">
+        <Select value={weekFilter} onChange={(e) => setWeekFilter(e.target.value)} className="w-full sm:w-auto" style={{ maxWidth: '100%' }}>
           <option value="">Todas las semanas</option>
           <option value="this">Esta semana ({weeks.find((w) => w.key === thisWeek)?.count || 0})</option>
           <option value="last">Semana pasada ({weeks.find((w) => w.key === lastWeek)?.count || 0})</option>
@@ -552,7 +570,7 @@ export default function Leads() {
             ))}
         </Select>
         {view === 'list' ? (
-          <Select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className="w-full sm:w-44">
+          <Select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} className="w-full sm:w-auto" style={{ maxWidth: '100%' }}>
             <option value="">Todas las etapas</option>
             {boardColumns.map((s: any) => (
               <option key={s.documentId} value={s.documentId}>
@@ -561,15 +579,15 @@ export default function Leads() {
             ))}
           </Select>
         ) : null}
-        <Select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} className="w-full sm:w-44">
-          <option value="">Todo nivel de contacto</option>
+        <Select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} className="w-full sm:w-auto" style={{ maxWidth: '100%' }}>
+          <option value="">Todos los niveles</option>
           {Object.entries(CONTACT_LEVEL_LABELS).map(([k, v]) => (
             <option key={k} value={k}>
               {v}
             </option>
           ))}
         </Select>
-        <Select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-full sm:w-40">
+        <Select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="w-full sm:w-auto" style={{ maxWidth: '100%' }}>
           <option value="">Todos los orígenes</option>
           {(sources || []).map((s: any) => (
             <option key={s.documentId} value={s.documentId}>
@@ -577,8 +595,8 @@ export default function Leads() {
             </option>
           ))}
         </Select>
-        <Select value={urgencyFilter} onChange={(e) => setUrgencyFilter(e.target.value)} className="w-full sm:w-36">
-          <option value="">Toda urgencia</option>
+        <Select value={urgencyFilter} onChange={(e) => setUrgencyFilter(e.target.value)} className="w-full sm:w-auto" style={{ maxWidth: '100%' }}>
+          <option value="">Todas las urgencias</option>
           {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
             <option key={k} value={k}>
               {v}
@@ -586,8 +604,8 @@ export default function Leads() {
           ))}
         </Select>
         {countries.length > 1 ? (
-          <Select value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} className="w-full sm:w-36">
-            <option value="">Todo país</option>
+          <Select value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} className="w-full sm:w-auto" style={{ maxWidth: '100%' }}>
+            <option value="">Todos los países</option>
             {countries.map((c: any) => (
               <option key={c} value={c}>
                 {c}
@@ -610,6 +628,16 @@ export default function Leads() {
         >
           Solo vencidos
         </button>
+        <label className="inline-flex items-center gap-1.5 text-sm text-slate-500">
+          <span className="whitespace-nowrap">Ordenar:</span>
+          <Select value={sort} onChange={(e) => setSort(e.target.value)} className="w-auto" style={{ maxWidth: '100%' }}>
+            {Object.entries(SORT_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </Select>
+        </label>
         {hasActiveFilters ? (
           <button onClick={clearFilters} className="text-sm font-medium text-slate-400 hover:text-slate-600">
             Limpiar filtros

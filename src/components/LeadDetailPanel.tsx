@@ -158,6 +158,8 @@ function ExternalHref({ href, children }: { href: string; children: ReactNode })
 }
 
 const phoneHref = (raw: string) => (/^https?:\/\//i.test(raw) ? raw : `tel:${raw.replace(/\s+/g, '')}`)
+/** "atrapalo.com" → "https://atrapalo.com"; si ya trae esquema se deja igual. Sin esto el navegador lo abre como ruta del panel. */
+const webHref = (raw: string) => (/^[a-z][a-z0-9+.-]*:/i.test(raw.trim()) ? raw.trim() : `https://${raw.trim()}`)
 
 type ContactForm = { name: string; role: string; email: string; phone: string; linkedinUrl: string }
 const emptyContact = (): ContactForm => ({ name: '', role: '', email: '', phone: '', linkedinUrl: '' })
@@ -578,7 +580,7 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
                           <div className="mt-1 flex flex-col gap-0.5 text-sm">
                             {c.email ? <ExternalHref href={`mailto:${c.email}`}>{c.email}</ExternalHref> : null}
                             {c.phone ? <ExternalHref href={phoneHref(c.phone)}>{c.phone}</ExternalHref> : null}
-                            {c.linkedinUrl ? <ExternalHref href={c.linkedinUrl}>{c.linkedinUrl}</ExternalHref> : null}
+                            {c.linkedinUrl ? <ExternalHref href={webHref(c.linkedinUrl)}>{c.linkedinUrl}</ExternalHref> : null}
                             {!c.email && !c.phone && !c.linkedinUrl ? <span className="text-xs text-slate-400">Sin datos de contacto</span> : null}
                           </div>
                         </div>
@@ -588,10 +590,10 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
                 </div>
 
                 <ViewRow label="Sitio web" empty={!lead.website}>
-                  {lead.website ? <ExternalHref href={lead.website}>{lead.website}</ExternalHref> : null}
+                  {lead.website ? <ExternalHref href={webHref(lead.website)}>{lead.website}</ExternalHref> : null}
                 </ViewRow>
                 <ViewRow label="LinkedIn de la empresa" empty={!lead.linkedinUrl}>
-                  {lead.linkedinUrl ? <ExternalHref href={lead.linkedinUrl}>{lead.linkedinUrl}</ExternalHref> : null}
+                  {lead.linkedinUrl ? <ExternalHref href={webHref(lead.linkedinUrl)}>{lead.linkedinUrl}</ExternalHref> : null}
                 </ViewRow>
                 <ViewRow label="País" empty={!lead.country}>
                   {lead.country}
