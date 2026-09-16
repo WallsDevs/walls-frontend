@@ -4,8 +4,8 @@ import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, 
 import { ArrowLeft } from 'lucide-react'
 import { api } from '../../lib/api'
 import { fmtDate, hours, monthLabel } from '../../lib/format'
-import { TASK_STATUS_LABELS } from '../../lib/labels'
-import { Card, ErrorNote, PageLoader } from '../../components/ui'
+import { PRIORITY_LABELS, TASK_STATUS_LABELS, TASK_STATUS_ORDER } from '../../lib/labels'
+import { AvatarStack, Badge, Card, ErrorNote, PageLoader, PRIORITY_TONES } from '../../components/ui'
 
 /* Colores del sistema de visualización (una sola serie → tono secuencial azul) */
 const C = { blue: '#2a78d6', muted: '#898781', grid: '#e1e0d9', ink: '#52514e' }
@@ -41,7 +41,7 @@ export default function ClientProjectReport() {
 
       <div className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight text-slate-900">{report.project.name}</h1>
-        <p className="mt-0.5 text-sm text-slate-500">Reporte de horas de trabajo</p>
+        <p className="mt-0.5 text-sm text-slate-500">Tablero de tareas y reporte de horas</p>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -55,6 +55,49 @@ export default function ClientProjectReport() {
             <p className="mt-1 text-2xl font-semibold text-slate-900">{count as number}</p>
           </Card>
         ))}
+      </div>
+
+      <div className="mb-6">
+        <div className="mb-3 flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold text-slate-900">Tablero de tareas</h2>
+          <span className="text-xs text-slate-400">{(report.tasks || []).length} tareas · solo lectura</span>
+        </div>
+        <div className="grid gap-3 overflow-x-auto md:grid-cols-4">
+          {TASK_STATUS_ORDER.map((status) => {
+            const list = (report.tasks || []).filter((t: any) => t.status === status)
+            return (
+              <div key={status} className="min-w-[220px] rounded-xl bg-slate-100 p-2">
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{TASK_STATUS_LABELS[status]}</span>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500">{list.length}</span>
+                </div>
+                <div className="space-y-2">
+                  {list.map((t: any) => (
+                    <div key={t.documentId} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                      <p className="mb-1.5 text-sm font-medium leading-snug text-slate-900">{t.title}</p>
+                      {t.description ? <p className="mb-1.5 line-clamp-2 text-xs text-slate-500">{t.description}</p> : null}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge tone={PRIORITY_TONES[t.priority] || 'gray'}>{PRIORITY_LABELS[t.priority]}</Badge>
+                        {t.kind === 'reunion' ? <Badge tone="violet">Reunión</Badge> : null}
+                        <span className="text-xs text-slate-400">
+                          {hours(t.hours)}
+                          {t.estimateHours ? ` / ${hours(t.estimateHours)}` : ''}
+                        </span>
+                        <AvatarStack people={t.assignees || []} className="ml-auto" />
+                      </div>
+                      {t.status === 'done' && t.completedAt ? (
+                        <p className="mt-1.5 text-xs text-emerald-600">Completada {fmtDate(t.completedAt)}</p>
+                      ) : t.dueDate ? (
+                        <p className="mt-1.5 text-xs text-slate-400">Vence {fmtDate(t.dueDate)}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                  {!list.length ? <p className="py-4 text-center text-xs text-slate-400">Vacío</p> : null}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">

@@ -65,7 +65,7 @@ export default function ClientProjects() {
                   </div>
 
                   <p className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-brand-600">
-                    Ver reporte de horas <ArrowRight size={14} />
+                    Ver tareas y horas <ArrowRight size={14} />
                   </p>
                 </Card>
               </Link>
