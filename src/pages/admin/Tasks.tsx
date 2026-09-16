@@ -28,6 +28,7 @@ export default function Tasks() {
   const [view, setView] = useState<ViewMode>('list')
   const [search, setSearch] = useState('')
   const [projectFilter, setProjectFilter] = useState('')
+  const [devFilter, setDevFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('open')
   const [modal, setModal] = useState<{ open: boolean; task?: any }>({ open: false })
 
@@ -54,14 +55,23 @@ export default function Tasks() {
     },
   })
 
+  // Developers que aparecen en alguna tarea (asignados), para el filtro.
+  const developers = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const t of tasks || []) for (const a of taskAssignees(t)) map.set(a.documentId, a.name)
+    return [...map.entries()].map(([documentId, name]) => ({ documentId, name })).sort((a, b) => a.name.localeCompare(b.name))
+  }, [tasks])
+
   const bySearchProject = useMemo(() => {
     const q = search.toLowerCase()
     return (tasks || []).filter((t: any) => {
       if (q && !t.title.toLowerCase().includes(q)) return false
       if (projectFilter && t.project?.documentId !== projectFilter) return false
+      if (devFilter === '__none' && taskAssignees(t).length) return false
+      if (devFilter && devFilter !== '__none' && !taskAssignees(t).some((a) => a.documentId === devFilter)) return false
       return true
     })
-  }, [tasks, search, projectFilter])
+  }, [tasks, search, projectFilter, devFilter])
 
   const filtered = useMemo(
     () =>
@@ -98,6 +108,15 @@ export default function Tasks() {
               {p.name}
             </option>
           ))}
+        </Select>
+        <Select value={devFilter} onChange={(e) => setDevFilter(e.target.value)} className="w-full sm:w-52">
+          <option value="">Todos los developers</option>
+          {developers.map((d) => (
+            <option key={d.documentId} value={d.documentId}>
+              {d.name}
+            </option>
+          ))}
+          <option value="__none">Sin asignar</option>
         </Select>
         {view === 'list' ? (
           <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full sm:w-44">
