@@ -173,17 +173,23 @@ export default function TaskModal({
   const meetingLogged = (entries || []).filter((e: any) => e.kind === 'reunion').reduce((s: number, e: any) => s + Number(e.hours || 0), 0)
 
   // Developers elegibles (equipo activo del proyecto) y los ya asignados, con nombre.
+  const savedAssignees = task ? taskAssignees(task) : []
   const teamOptions = (team || [])
     .filter((a: any) => a.developer && a.active !== false)
     .map((a: any) => ({ value: a.developer.documentId, label: devName(a.developer), hint: a.role }))
+  // Asignados que ya no están en el equipo (o la tarea no tiene proyecto): se muestran por nombre, no por id.
+  const chipOptions = [
+    ...teamOptions,
+    ...savedAssignees.filter((a) => !teamOptions.some((o: any) => o.value === a.documentId)).map((a) => ({ value: a.documentId, label: a.name, hint: 'fuera del equipo' })),
+  ]
   const assignedPeople = (form.assignees as string[])
     .map((id) => {
       const opt = teamOptions.find((o: any) => o.value === id)
       const fromTask = task ? taskAssignees(task).find((a) => a.documentId === id) : null
       return { documentId: id, name: opt?.label || fromTask?.name || id }
     })
-  const savedAssignees = task ? taskAssignees(task) : []
   const isMeeting = form.kind === 'reunion'
+  const missingProject = !!task && !task.project
 
   // Horas agrupadas: las de una misma reunión van juntas.
   const entryGroups = (() => {
@@ -234,9 +240,12 @@ export default function TaskModal({
       >
         <div className={task ? 'grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]' : ''}>
         <div className={task ? 'space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200' : 'space-y-4'}>
+          {missingProject ? (
+            <ErrorNote error={new Error('Esta tarea no tiene proyecto. Elige uno y guarda para poder asignar developers y registrar horas.')} />
+          ) : null}
           {!projectId && (
             <Field label="Proyecto *">
-              <Select value={form.project} onChange={(e) => set('project', e.target.value)} disabled={!!task}>
+              <Select value={form.project} onChange={(e) => set('project', e.target.value)} disabled={!!task && !missingProject}>
                 <option value="">Selecciona…</option>
                 {(projects || []).map((p: any) => (
                   <option key={p.documentId} value={p.documentId}>
@@ -296,7 +305,7 @@ export default function TaskModal({
           <div>
             <p className="mb-1.5 text-sm font-medium text-slate-700">{isMeeting ? 'Participantes' : 'Asignados'}</p>
             <MultiSelectChips
-              options={teamOptions}
+              options={chipOptions}
               value={form.assignees}
               onChange={(v) => set('assignees', v)}
               disabled={!effectiveProject}
@@ -399,9 +408,14 @@ export default function TaskModal({
               ) : null}
               <div className="border-t border-slate-200 bg-slate-50 p-3">
                 <p className="mb-2 text-xs font-medium text-slate-500">{isMeeting ? 'Registrar horas a una sola persona' : 'Registrar horas (como admin)'}</p>
+                {missingProject ? (
+                  <p className="text-xs text-amber-700">Asigna un proyecto a la tarea y guarda: las horas se registran a un developer del equipo de ese proyecto.</p>
+                ) : effectiveProject && team && !teamOptions.length ? (
+                  <p className="text-xs text-amber-700">El proyecto no tiene developers con asignación activa. Agrégalos en el proyecto, pestaña Equipo.</p>
+                ) : null}
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[1fr_125px_150px_90px_auto]">
-                  <Select value={entry.developer} onChange={(e) => setEntry({ ...entry, developer: e.target.value })}>
-                    <option value="">Developer…</option>
+                  <Select value={entry.developer} onChange={(e) => setEntry({ ...entry, developer: e.target.value })} disabled={!teamOptions.length}>
+                    <option value="">{teamOptions.length ? 'Developer…' : 'Sin equipo disponible'}</option>
                     {(team || [])
                       .filter((a: any) => a.developer)
                       .map((a: any) => (
