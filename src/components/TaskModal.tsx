@@ -40,7 +40,8 @@ export default function TaskModal({
   const [form, setForm] = useState<any>(emptyForm)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
-  const [entry, setEntry] = useState({ developer: '', date: todayISO(), hours: '', description: '' })
+  const [entry, setEntry] = useState({ developer: '', date: todayISO(), hours: '', description: '', kind: 'trabajo' })
+  const [deleteEntry, setDeleteEntry] = useState<{ ids: string[]; label: string } | null>(null)
 
   const effectiveProject = projectId || form.project
 
@@ -90,7 +91,7 @@ export default function TaskModal({
     } else {
       setForm({ ...emptyForm, project: projectId || '' })
     }
-    setEntry({ developer: '', date: todayISO(), hours: '', description: '' })
+    setEntry({ developer: '', date: todayISO(), hours: '', description: '', kind: task?.kind === 'reunion' ? 'reunion' : 'trabajo' })
     setAttachments(
       (task?.attachments || []).map((a: any) => ({ id: a.id, url: a.url, name: a.name })),
     )
@@ -149,11 +150,22 @@ export default function TaskModal({
         hours: Number(entry.hours),
         description: entry.description || null,
         billed: false,
-        kind: 'trabajo',
+        kind: entry.kind,
       }),
     onSuccess: () => {
       invalidate()
-      setEntry({ developer: '', date: todayISO(), hours: '', description: '' })
+      setEntry((e) => ({ ...e, developer: '', hours: '', description: '' }))
+    },
+  })
+
+  // Borrar horas registradas por error (una entrada, o todas las de una reunión). Las facturadas no se tocan.
+  const deleteEntriesMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) await rest.remove('time-entries', id)
+    },
+    onSuccess: () => {
+      invalidate()
+      setDeleteEntry(null)
     },
   })
 
@@ -322,7 +334,22 @@ export default function TaskModal({
                           {g.description ? <span className="text-slate-500"> · {g.description}</span> : null}
                         </span>
                         <span className="shrink-0 font-medium">{hours(g.items.reduce((s: number, e: any) => s + Number(e.hours || 0), 0))}</span>
-                        {g.items.every((e: any) => e.billed) ? <Badge tone="green">Facturada</Badge> : null}
+                        {g.items.every((e: any) => e.billed) ? (
+                          <Badge tone="green">Facturada</Badge>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              setDeleteEntry({
+                                ids: g.items.filter((e: any) => !e.billed).map((e: any) => e.documentId),
+                                label: `la reunión del ${fmtDate(g.date)} (${g.items.length} personas)`,
+                              })
+                            }
+                            title="Eliminar esta reunión"
+                            className="shrink-0 rounded-md p-1 text-slate-300 hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                       <p className="mt-0.5 pl-[5.75rem] text-xs text-slate-400">{g.items.map((e: any) => devName(e.developer)).join(', ')}</p>
                     </li>
@@ -334,8 +361,19 @@ export default function TaskModal({
                           {e.developer ? devName(e.developer) : '—'}
                           {e.description ? ` · ${e.description}` : ''}
                         </span>
+                        {e.kind === 'reunion' ? <Badge tone="violet">Reunión</Badge> : null}
                         <span className="shrink-0 font-medium">{hours(e.hours)}</span>
-                        {e.billed ? <Badge tone="green">Facturada</Badge> : null}
+                        {e.billed ? (
+                          <Badge tone="green">Facturada</Badge>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteEntry({ ids: [e.documentId], label: `${hours(e.hours)} de ${devName(e.developer)} del ${fmtDate(e.date)}` })}
+                            title="Eliminar estas horas"
+                            className="shrink-0 rounded-md p-1 text-slate-300 hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </li>
                     ))
                   ),
@@ -359,7 +397,7 @@ export default function TaskModal({
               ) : null}
               <div className="border-t border-slate-200 bg-slate-50 p-3">
                 <p className="mb-2 text-xs font-medium text-slate-500">{isMeeting ? 'Registrar horas a una sola persona' : 'Registrar horas (como admin)'}</p>
-                <div className="grid gap-2 sm:grid-cols-[1fr_120px_80px_auto]">
+                <div className="grid gap-2 sm:grid-cols-[1fr_110px_120px_80px_auto]">
                   <Select value={entry.developer} onChange={(e) => setEntry({ ...entry, developer: e.target.value })}>
                     <option value="">Developer…</option>
                     {(team || [])
@@ -369,6 +407,10 @@ export default function TaskModal({
                           {devName(a.developer)}
                         </option>
                       ))}
+                  </Select>
+                  <Select value={entry.kind} onChange={(e) => setEntry({ ...entry, kind: e.target.value })} title="Tipo de horas">
+                    <option value="trabajo">Trabajo</option>
+                    <option value="reunion">Reunión</option>
                   </Select>
                   <Input type="date" value={entry.date} onChange={(e) => setEntry({ ...entry, date: e.target.value })} />
                   <Input
@@ -403,6 +445,14 @@ export default function TaskModal({
         loading={deleteMutation.isPending}
         title="Eliminar tarea"
         message="Se eliminará la tarea. Las horas registradas quedarán sin tarea asociada."
+      />
+      <ConfirmDialog
+        open={!!deleteEntry}
+        onClose={() => setDeleteEntry(null)}
+        onConfirm={() => deleteEntry && deleteEntriesMutation.mutate(deleteEntry.ids)}
+        loading={deleteEntriesMutation.isPending}
+        title="Eliminar horas"
+        message={`¿Eliminar ${deleteEntry?.label || 'estas horas'}? Dejarán de contar para la facturación.`}
       />
     </>
   )

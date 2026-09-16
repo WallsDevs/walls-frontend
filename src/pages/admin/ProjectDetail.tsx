@@ -124,6 +124,19 @@ export default function ProjectDetail() {
     },
   })
 
+  // Horas registradas por error: se borran mientras no estén facturadas.
+  const [deleteEntry, setDeleteEntry] = useState<any | null>(null)
+  const deleteEntryMutation = useMutation({
+    mutationFn: (id: string) => rest.remove('time-entries', id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['project-entries'] })
+      qc.invalidateQueries({ queryKey: ['project'] })
+      qc.invalidateQueries({ queryKey: ['task-entries'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+      setDeleteEntry(null)
+    },
+  })
+
   const [docText, setDocText] = useState<string | null>(null)
   const [newLink, setNewLink] = useState({ title: '', url: '' })
   const docMutation = useMutation({
@@ -391,6 +404,7 @@ export default function ProjectDetail() {
                 <Th>Descripción</Th>
                 <Th right>Horas</Th>
                 <Th>Estado</Th>
+                <Th />
               </tr>
             </thead>
             <tbody>
@@ -407,11 +421,22 @@ export default function ProjectDetail() {
                   <Td className="max-w-64 truncate text-slate-500">{e.description || '—'}</Td>
                   <Td right className="font-medium">{hours(e.hours)}</Td>
                   <Td>{e.billed ? <Badge tone="green">Facturada</Badge> : <Badge tone="gray">Sin facturar</Badge>}</Td>
+                  <Td right>
+                    {!e.billed ? (
+                      <button
+                        onClick={() => setDeleteEntry(e)}
+                        title="Eliminar estas horas"
+                        className="rounded-md p-1 text-slate-300 hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    ) : null}
+                  </Td>
                 </tr>
               ))}
               {!filteredEntries.length && (
                 <tr>
-                  <Td className="py-8 text-center text-slate-400" colSpan={6}>
+                  <Td className="py-8 text-center text-slate-400" colSpan={7}>
                     Sin horas en este período.
                   </Td>
                 </tr>
@@ -522,6 +547,14 @@ export default function ProjectDetail() {
         loading={deleteAssignmentMutation.isPending}
         title="Quitar del equipo"
         message={`¿Quitar a ${deleteAssignment?.developer?.firstName} de este proyecto? Si ya registró horas, considera desactivar la asignación en lugar de eliminarla.`}
+      />
+      <ConfirmDialog
+        open={!!deleteEntry}
+        onClose={() => setDeleteEntry(null)}
+        onConfirm={() => deleteEntry && deleteEntryMutation.mutate(deleteEntry.documentId)}
+        loading={deleteEntryMutation.isPending}
+        title="Eliminar horas"
+        message={`¿Eliminar ${hours(deleteEntry?.hours || 0)} de ${deleteEntry?.developer ? `${deleteEntry.developer.firstName} ${deleteEntry.developer.lastName}` : '—'} del ${deleteEntry ? fmtDate(deleteEntry.date) : ''}? Dejarán de contar para la facturación.`}
       />
     </div>
   )
