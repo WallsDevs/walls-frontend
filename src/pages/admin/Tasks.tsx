@@ -4,6 +4,7 @@ import { LayoutGrid, List, ListTodo, Plus } from 'lucide-react'
 import { rest } from '../../lib/api'
 import { fmtDate } from '../../lib/format'
 import { PRIORITY_LABELS, TASK_STATUS_LABELS, TASK_STATUS_ORDER, taskAssignees } from '../../lib/labels'
+import { usePersistedState } from '../../lib/usePersistedState'
 import {
   AvatarStack,
   Badge,
@@ -25,11 +26,12 @@ type ViewMode = 'list' | 'board'
 
 export default function Tasks() {
   const qc = useQueryClient()
-  const [view, setView] = useState<ViewMode>('list')
-  const [search, setSearch] = useState('')
-  const [projectFilter, setProjectFilter] = useState('')
-  const [devFilter, setDevFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('open')
+  // Vista y filtros persisten en el navegador; el tablero es la vista por defecto.
+  const [view, setView] = usePersistedState<ViewMode>('walls_tasks_view', 'board')
+  const [search, setSearch] = usePersistedState('walls_tasks_search', '')
+  const [projectFilter, setProjectFilter] = usePersistedState('walls_tasks_project', '')
+  const [devFilter, setDevFilter] = usePersistedState('walls_tasks_dev', '')
+  const [statusFilter, setStatusFilter] = usePersistedState('walls_tasks_status', 'open')
   const [modal, setModal] = useState<{ open: boolean; task?: any }>({ open: false })
 
   const { data: tasks, isLoading } = useQuery({
