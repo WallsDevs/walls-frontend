@@ -316,7 +316,7 @@ export function Modal({
         className={cx(
           'relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl',
           MODAL_SIZES[size],
-          size === 'xl' && 'sm:mx-4 sm:h-[94vh] sm:max-h-[94vh]',
+          size === 'xl' && 'sm:mx-4 sm:max-h-[94vh]',
         )}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">

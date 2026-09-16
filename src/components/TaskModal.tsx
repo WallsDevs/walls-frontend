@@ -211,7 +211,7 @@ export default function TaskModal({
         open={open}
         onClose={onClose}
         title={task ? (isMeeting ? 'Editar reunión' : 'Editar tarea') : isMeeting ? 'Nueva reunión' : 'Nueva tarea'}
-        wide
+        size={task ? 'xl' : 'lg'}
         footer={
           <>
             {task ? (
@@ -232,7 +232,8 @@ export default function TaskModal({
           </>
         }
       >
-        <div className="space-y-4">
+        <div className={task ? 'grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]' : ''}>
+        <div className={task ? 'space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200' : 'space-y-4'}>
           {!projectId && (
             <Field label="Proyecto *">
               <Select value={form.project} onChange={(e) => set('project', e.target.value)} disabled={!!task}>
@@ -310,9 +311,10 @@ export default function TaskModal({
           </Field>
 
           {saveMutation.error ? <ErrorNote error={saveMutation.error} /> : null}
+        </div>
 
           {task ? (
-            <div className="rounded-xl border border-slate-200">
+            <div className="self-start overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
               <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Horas registradas</h3>
                 <span className="text-xs font-semibold text-slate-700">
@@ -320,7 +322,7 @@ export default function TaskModal({
                   {meetingLogged > 0 ? <span className="ml-1.5 font-normal text-violet-600">· {hours(meetingLogged)} en reuniones</span> : null}
                 </span>
               </div>
-              <ul className="max-h-56 divide-y divide-slate-100 overflow-y-auto">
+              <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
                 {entryGroups.map((g) =>
                   g.meeting ? (
                     <li key={g.key} className="px-4 py-2 text-sm">
@@ -397,7 +399,7 @@ export default function TaskModal({
               ) : null}
               <div className="border-t border-slate-200 bg-slate-50 p-3">
                 <p className="mb-2 text-xs font-medium text-slate-500">{isMeeting ? 'Registrar horas a una sola persona' : 'Registrar horas (como admin)'}</p>
-                <div className="grid gap-2 sm:grid-cols-[1fr_110px_120px_80px_auto]">
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[1fr_125px_150px_90px_auto]">
                   <Select value={entry.developer} onChange={(e) => setEntry({ ...entry, developer: e.target.value })}>
                     <option value="">Developer…</option>
                     {(team || [])
