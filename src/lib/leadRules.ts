@@ -42,10 +42,21 @@ export const NEEDS_NEXT_STEP = ['prospeccion', 'llamada', 'propuesta']
 /** Estado de la fecha de próximo paso: vencido, hoy, pronto (≤ 2 días), ok o sin fecha. Solo aplica a etapas abiertas. */
 export type NextStepStatus = 'overdue' | 'today' | 'soon' | 'ok'
 
+/**
+ * ¿La etapa exige fecha de próximo paso (y por tanto un lead ahí puede vencer)?
+ * Si no está configurado, se asume que sí salvo en Por revisar y en las etapas finales.
+ * Espejo de backend/src/lead-stages.js → stageTracksNextStep.
+ */
+export function stageTracksNextStep(stage: any): boolean {
+  if (!stage) return true
+  if (stage.tracksNextStep === true || stage.tracksNextStep === false) return stage.tracksNextStep
+  return stage.outcome === 'open' && stage.slug !== 'por_revisar'
+}
+
 export function nextStepStatus(lead: any, today = new Date().toISOString().slice(0, 10)): NextStepStatus | null {
   const date = lead?.nextFollowUpDate
   if (!date) return null
-  if (lead.stage && lead.stage.outcome && lead.stage.outcome !== 'open') return null
+  if (!stageTracksNextStep(lead.stage)) return null
   if (date < today) return 'overdue'
   if (date === today) return 'today'
   const days = Math.round((Date.parse(date) - Date.parse(today)) / 86400000)

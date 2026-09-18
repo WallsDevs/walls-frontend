@@ -343,7 +343,7 @@ export default function Leads() {
   })
 
   const today = todayISO()
-  const isOverdue = (l: any) => (!l.stage || l.stage.outcome === 'open') && l.nextFollowUpDate && l.nextFollowUpDate < today
+  const isOverdue = (l: any) => nextStepStatus(l, today) === 'overdue'
 
   const countries = useMemo(
     () => Array.from(new Set((leads || []).map((l: any) => l.country).filter(Boolean))).sort(),

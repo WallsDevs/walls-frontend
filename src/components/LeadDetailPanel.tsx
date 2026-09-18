@@ -19,7 +19,7 @@ import {
 import { api, rest } from '../lib/api'
 import { fmtDate } from '../lib/format'
 import { CLOSE_REASON_LABELS, CONTACT_LEVEL_LABELS, LEAD_ACTIVITY_KIND_LABELS, PRIORITY_LABELS } from '../lib/labels'
-import { CONTACT_LEVEL_HINTS, NEXT_STEP_STYLES, nextStepLabel, nextStepStatus, suggestContactLevel } from '../lib/leadRules'
+import { CONTACT_LEVEL_HINTS, NEXT_STEP_STYLES, nextStepLabel, nextStepStatus, stageTracksNextStep, suggestContactLevel } from '../lib/leadRules'
 import { useStageChange } from './StageChangeDialog'
 import { RichText, RichTextarea } from './RichText'
 import { Badge, Button, Card, ColorBadge, ConfirmDialog, CONTACT_LEVEL_TONES, cx, ErrorNote, Field, Input, Modal, PageLoader, Select } from './ui'
@@ -348,19 +348,32 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
           )}
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <label className="block">
+          <div>
             <span className={cx('mb-1 block text-[11px] font-medium uppercase tracking-wide', stepStyle && stepStatus !== 'ok' ? stepStyle.text : 'text-slate-400')}>
               {stepStatus && stepStatus !== 'ok' ? nextStepLabel(stepStatus, lead.nextFollowUpDate).replace(/ · .*$/, '') : 'Próximo paso'}
+              {!stageTracksNextStep(lead.stage) ? <span className="ml-1 normal-case tracking-normal text-slate-400">· no vence en esta etapa</span> : null}
             </span>
-            <Input
-              type="date"
-              value={lead.nextFollowUpDate || ''}
-              onChange={(e) => nextStepMutation.mutate(e.target.value)}
-              className={cx('py-1.5', stepStyle?.field)}
-              style={{ width: '10.5rem' }}
-              title="Fecha del próximo paso con este lead"
-            />
-          </label>
+            <span className="inline-flex items-center gap-1">
+              <Input
+                type="date"
+                value={lead.nextFollowUpDate || ''}
+                onChange={(e) => nextStepMutation.mutate(e.target.value)}
+                className={cx('py-1.5', stepStyle?.field)}
+                style={{ width: '10.5rem' }}
+                title={stageTracksNextStep(lead.stage) ? 'Fecha del próximo paso con este lead' : 'En esta etapa la fecha es opcional y no genera alertas'}
+              />
+              {lead.nextFollowUpDate ? (
+                <button
+                  type="button"
+                  onClick={() => nextStepMutation.mutate('')}
+                  title="Quitar la fecha: este lead no tiene próximo paso"
+                  className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <X size={14} />
+                </button>
+              ) : null}
+            </span>
+          </div>
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-400">Urgencia</span>
             <Select value={lead.urgency || ''} onChange={(e) => urgencyMutation.mutate(e.target.value)} className="py-1.5" style={{ width: '8.5rem' }}>

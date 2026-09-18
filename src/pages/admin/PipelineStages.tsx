@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { ArrowDown, ArrowLeft, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { rest } from '../../lib/api'
 import { PIPELINE_OUTCOME_LABELS, PIPELINE_OUTCOME_TONES } from '../../lib/labels'
+import { stageTracksNextStep } from '../../lib/leadRules'
 import {
   Badge,
   Button,
@@ -184,6 +185,18 @@ export default function PipelineStages() {
               ))}
             </Select>
             <Badge tone={PIPELINE_OUTCOME_TONES[s.outcome]}>{PIPELINE_OUTCOME_LABELS[s.outcome]}</Badge>
+            <label
+              className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-slate-600"
+              title="Si está activo, los leads en esta etapa deben tener fecha de próximo paso y se marcan como vencidos al pasarse. Desactívalo en etapas de espera o descarte."
+            >
+              <input
+                type="checkbox"
+                checked={stageTracksNextStep(s)}
+                onChange={(e) => updateMutation.mutate({ id: s.documentId, data: { tracksNextStep: e.target.checked } })}
+                className="size-4 accent-brand-500"
+              />
+              Vence
+            </label>
             {s.slug === 'por_revisar' ? (
               <span title="Punto de entrada: no se puede eliminar" className="shrink-0">
                 <Badge tone="blue">Entrada</Badge>
