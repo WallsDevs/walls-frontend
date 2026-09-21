@@ -22,7 +22,7 @@ import { CLOSE_REASON_LABELS, CONTACT_LEVEL_LABELS, LEAD_ACTIVITY_KIND_LABELS, P
 import { CONTACT_LEVEL_HINTS, NEXT_STEP_STYLES, nextStepLabel, nextStepStatus, stageTracksNextStep, suggestContactLevel } from '../lib/leadRules'
 import { useStageChange } from './StageChangeDialog'
 import { RichText, RichTextarea } from './RichText'
-import { Badge, Button, Card, ColorBadge, ConfirmDialog, CONTACT_LEVEL_TONES, cx, ErrorNote, Field, Input, Modal, PageLoader, Select } from './ui'
+import { Badge, Button, Card, ColorBadge, ConfirmDialog, CONTACT_LEVEL_TONES, cx, ErrorNote, Field, Input, Modal, PageLoader, Select, Textarea } from './ui'
 
 const ACTIVITY_ICONS: Record<string, any> = {
   mensaje_enviado: Send,
@@ -542,15 +542,8 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
                   <Input type="date" value={form.nextFollowUpDate} onChange={(e) => set('nextFollowUpDate', e.target.value)} />
                 </Field>
               </div>
-              <Field label="Motivo de cierre">
-                <Select value={form.closeReason} onChange={(e) => set('closeReason', e.target.value)}>
-                  <option value="">—</option>
-                  {Object.entries(CLOSE_REASON_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
-                  ))}
-                </Select>
+              <Field label="Motivo de cierre" hint="Texto libre; se pide al mover a Cerrado sin venta">
+                <Textarea value={form.closeReason} onChange={(e) => set('closeReason', e.target.value)} placeholder="Por qué se cerró sin venta" className="min-h-16" />
               </Field>
               <Field label="Notas" hint="Puedes usar **negrita**, *cursiva* y listas con “- ”.">
                 <RichTextarea value={form.notes} onChange={(v) => set('notes', v)} />
@@ -637,7 +630,7 @@ export default function LeadDetailPanel({ documentId, embedded = false, onDelete
                   ) : null}
                 </ViewRow>
                 <ViewRow label="Motivo de cierre" empty={!lead.closeReason}>
-                  {CLOSE_REASON_LABELS[lead.closeReason]}
+                  <span className="whitespace-pre-line">{CLOSE_REASON_LABELS[lead.closeReason] || lead.closeReason}</span>
                 </ViewRow>
                 <ViewRow label="Última actividad" empty={!lead.lastActivityAt}>
                   {lead.lastActivityAt ? fmtDate(lead.lastActivityAt) : null}

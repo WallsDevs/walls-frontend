@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { rest } from '../lib/api'
 import { todayISO } from '../lib/format'
-import { CLOSE_REASON_LABELS, stageChangeRequirements, type StageNeed } from '../lib/leadRules'
-import { Button, ErrorNote, Field, Input, Modal, Select } from './ui'
+import { stageChangeRequirements, type StageNeed } from '../lib/leadRules'
+import { Button, ErrorNote, Field, Input, Modal, Textarea } from './ui'
 
 type Pending = { lead: any; target: any; needs: StageNeed[] }
 
@@ -82,15 +82,14 @@ export function useStageChange({ onSuccess }: { onSuccess?: () => void } = {}) {
             <span className="font-medium text-slate-900">{pending.target.name}</span> falta:
           </p>
           {pending.needs.includes('closeReason') ? (
-            <Field label="Motivo de cierre *">
-              <Select value={form.closeReason} onChange={(e) => setForm((f) => ({ ...f, closeReason: e.target.value }))}>
-                <option value="">Elige un motivo…</option>
-                {Object.entries(CLOSE_REASON_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </Select>
+            <Field label="Motivo de cierre *" hint="Escríbelo con tus palabras: queda en el lead para saber después por qué se perdió">
+              <Textarea
+                value={form.closeReason}
+                onChange={(e) => setForm((f) => ({ ...f, closeReason: e.target.value }))}
+                placeholder="Ej: ya trabajan con otra agencia y no van a cambiar este año"
+                className="min-h-20"
+                autoFocus
+              />
             </Field>
           ) : null}
           {pending.needs.includes('nextFollowUpDate') ? (
