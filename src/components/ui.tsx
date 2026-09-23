@@ -279,7 +279,7 @@ export const PIPELINE_OUTCOME_TONES: Record<string, BadgeTone> = {
 const MODAL_SIZES = {
   md: 'sm:max-w-lg',
   lg: 'sm:max-w-3xl',
-  xl: 'sm:max-w-6xl',
+  xl: 'sm:max-w-[1400px]',
   full: 'sm:max-w-[96vw]',
 } as const
 
