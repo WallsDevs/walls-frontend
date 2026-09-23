@@ -490,11 +490,9 @@ export default function Content() {
           </div>
         ) : null}
         <div className="p-3">
-          <div className="mb-1.5 flex items-start gap-2">
-            <p className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-900">{p.title}</p>
-            <Badge tone={NETWORK_TONES[x.network] || 'gray'}>{NETWORK_LABELS[x.network]}</Badge>
-          </div>
+          <p className="mb-1.5 text-sm font-medium leading-snug text-slate-900">{p.title}</p>
           <div className="flex flex-wrap items-center gap-1.5">
+            {x.network ? <Badge tone={NETWORK_TONES[x.network] || 'gray'}>{NETWORK_LABELS[x.network]}</Badge> : null}
             {format ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                 <FormatIcon format={format} size={11} /> {CONTENT_FORMAT_LABELS[format]}
