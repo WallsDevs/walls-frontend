@@ -15,6 +15,7 @@ import Staff from './pages/admin/Staff'
 import Quotes from './pages/admin/Quotes'
 import QuoteDetail from './pages/admin/QuoteDetail'
 import Leads from './pages/admin/Leads'
+import Content from './pages/admin/Content'
 import LeadDetail from './pages/admin/LeadDetail'
 import PipelineStages from './pages/admin/PipelineStages'
 import LeadSources from './pages/admin/LeadSources'
@@ -43,6 +44,7 @@ function AdminRoutes() {
       <Route path="quotes" element={<Quotes />} />
       <Route path="quotes/:documentId" element={<QuoteDetail />} />
       <Route path="leads" element={<Leads />} />
+      <Route path="content" element={<Content />} />
       <Route path="leads/:documentId" element={<LeadDetail />} />
       <Route path="pipeline-stages" element={<PipelineStages />} />
       <Route path="lead-sources" element={<LeadSources />} />

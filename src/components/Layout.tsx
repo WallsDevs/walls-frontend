@@ -16,6 +16,7 @@ import {
   LogOut,
   Menu,
   Target,
+  Megaphone,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -32,6 +33,7 @@ const NAV_BY_ROLE: Record<string, NavItem[]> = {
     { to: '/tasks', label: 'Tareas', icon: ListTodo },
     { to: '/quotes', label: 'Presupuestos', icon: FileSpreadsheet },
     { to: '/leads', label: 'Leads', icon: Target },
+    { to: '/content', label: 'Contenido', icon: Megaphone },
     { to: '/billing', label: 'Facturación', icon: Receipt },
     { to: '/clients', label: 'Clientes', icon: Building2 },
     { to: '/staff', label: 'Equipo interno', icon: Briefcase },
@@ -165,7 +167,7 @@ function SidebarContent({ onNavigate, collapsed }: { onNavigate?: () => void; co
 }
 
 // Páginas que aprovechan todo el ancho (tableros con muchas columnas) en vez del máximo de lectura.
-const FULL_WIDTH_PATHS = ['/leads', '/tasks']
+const FULL_WIDTH_PATHS = ['/leads', '/tasks', '/content']
 
 export default function Layout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
