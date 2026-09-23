@@ -191,7 +191,7 @@ function ContentModal({ open, onClose, post, initialDate, pillars }: { open: boo
           </>
         }
       >
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] xl:grid-cols-[minmax(0,5fr)_minmax(0,3fr)_minmax(0,4fr)]">
           <div className="space-y-4 rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <Field label="Título *">
               <Input value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="Tu web tiene visitas, pero no ventas" autoFocus={!post} />
@@ -265,21 +265,12 @@ function ContentModal({ open, onClose, post, initialDate, pillars }: { open: boo
           </div>
 
           <div className="space-y-5 self-start">
-            <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Archivos</p>
-              <MediaField value={media} onChange={setMedia} />
+            <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Archivos</p>
+              <MediaField value={media} onChange={setMedia} compact />
+              <p className="mt-2 text-[11px] text-slate-400">Para el carrusel: en LinkedIn se sube el PDF; en Instagram, cada diapositiva como imagen.</p>
             </div>
-            <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Vista previa</p>
-              <SocialPreview
-                body={form.body}
-                firstComment={form.firstComment}
-                media={media}
-                format={form.format}
-                networks={form.publications.map((p: Publication) => p.network)}
-              />
-            </div>
-            <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+            <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Dónde se publica</p>
               <p className="mb-3 text-xs text-slate-400">Marca las redes; cuando esté publicado, pega el enlace al post.</p>
               <div className="space-y-2">
@@ -307,6 +298,17 @@ function ContentModal({ open, onClose, post, initialDate, pillars }: { open: boo
                 })}
               </div>
             </div>
+          </div>
+
+          <div className="self-start rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200 lg:col-span-2 xl:col-span-1">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Vista previa</p>
+            <SocialPreview
+              body={form.body}
+              firstComment={form.firstComment}
+              media={media}
+              format={form.format}
+              networks={form.publications.map((p: Publication) => p.network)}
+            />
           </div>
         </div>
       </Modal>

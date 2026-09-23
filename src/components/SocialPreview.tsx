@@ -56,7 +56,11 @@ function Avatar({ size = 'md' }: { size?: 'sm' | 'md' }) {
 function MediaBlock({ media, format, ratio, network }: { media: MediaItem[]; format?: string; ratio: string; network: 'linkedin' | 'instagram' }) {
   const [index, setIndex] = useState(0)
   useEffect(() => setIndex(0), [media.length])
-  const visual = media.filter((m) => ['image', 'video', 'pdf'].includes(mediaKind(m)))
+  // LinkedIn: el PDF es el carrusel (tiene prioridad); si no hay, imágenes o vídeo.
+  // Instagram: solo imágenes y vídeos (varias imágenes = carrusel); el PDF no se puede subir.
+  const pdfs = media.filter((m) => mediaKind(m) === 'pdf')
+  const visuals = media.filter((m) => ['image', 'video'].includes(mediaKind(m)))
+  const visual = network === 'linkedin' && pdfs.length ? pdfs.slice(0, 1) : visuals
   if (!visual.length) {
     if (format === 'encuesta' && network === 'linkedin') {
       return (
@@ -73,8 +77,15 @@ function MediaBlock({ media, format, ratio, network }: { media: MediaItem[]; for
     }
     if (network === 'instagram') {
       return (
-        <div className="flex aspect-square w-full items-center justify-center bg-slate-100 text-center text-xs text-slate-400">
-          Sube una imagen o vídeo para ver la publicación
+        <div className="flex aspect-[4/5] w-full flex-col items-center justify-center gap-1 bg-slate-100 px-6 text-center text-xs text-slate-500">
+          {pdfs.length ? (
+            <>
+              <span className="font-medium text-slate-700">Instagram no acepta PDF</span>
+              <span>Exporta las diapositivas del carrusel como imágenes (1080 × 1350) y súbelas: cada imagen será una diapositiva.</span>
+            </>
+          ) : (
+            'Sube una o varias imágenes (carrusel) o un vídeo para ver la publicación'
+          )}
         </div>
       )
     }
@@ -82,7 +93,7 @@ function MediaBlock({ media, format, ratio, network }: { media: MediaItem[]; for
   }
   const current = visual[Math.min(index, visual.length - 1)]
   const kind = mediaKind(current)
-  const multi = visual.length > 1 || format === 'carrusel'
+  const multi = visual.length > 1 || (format === 'carrusel' && kind !== 'video')
   return (
     <div className="relative w-full bg-black" style={{ aspectRatio: ratio }}>
       {kind === 'image' ? (
@@ -92,14 +103,14 @@ function MediaBlock({ media, format, ratio, network }: { media: MediaItem[]; for
       ) : (
         <div className="flex size-full flex-col items-center justify-center gap-2 bg-slate-800 text-slate-100">
           <FileText size={34} />
-          <span className="text-xs">Documento PDF · {current.name}</span>
-          <span className="text-[11px] text-slate-400">{network === 'linkedin' ? 'LinkedIn lo muestra como carrusel deslizable' : 'Instagram no acepta PDF: exporta las diapositivas como imágenes'}</span>
+          <span className="text-xs">Carrusel PDF · {current.name}</span>
+          <span className="text-[11px] text-slate-400">LinkedIn lo muestra como documento deslizable, página a página</span>
         </div>
       )}
       {multi ? (
         <>
           <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white">
-            {index + 1}/{Math.max(visual.length, 1)}
+            {kind === 'pdf' ? 'PDF' : `${index + 1}/${Math.max(visual.length, 1)}`}
           </span>
           {visual.length > 1 ? (
             <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1">
@@ -257,7 +268,7 @@ export default function SocialPreview({
           {bodyLen.toLocaleString('es')} / {limit.toLocaleString('es')} caracteres · corte "ver más" a los {cut}
         </span>
       </div>
-      <div className="mx-auto max-w-[420px]">
+      <div className="mx-auto w-full max-w-[560px]">
         {network === 'linkedin' ? (
           <LinkedInPreview body={body} firstComment={firstComment} media={media} format={format} />
         ) : (

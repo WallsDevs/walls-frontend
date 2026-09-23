@@ -17,7 +17,10 @@ const mb = (b: number) => `${Math.round((b / MB) * 10) / 10} MB`
  * Subida de archivos para contenido: imágenes, vídeos y PDF. Arrastrar y soltar o elegir.
  * Muestra miniaturas, reproduce vídeos y abre PDF. El servidor vuelve a validar tipo y tamaño.
  */
-export default function MediaField({ value, onChange }: { value: MediaItem[]; onChange: (next: MediaItem[]) => void }) {
+/** A qué red irá cada archivo: el PDF es el carrusel de LinkedIn; imágenes y vídeos sirven en ambas. */
+const networksFor = (kind: string) => (kind === 'pdf' ? 'LinkedIn (carrusel)' : kind === 'file' ? 'Solo referencia' : 'LinkedIn · Instagram')
+
+export default function MediaField({ value, onChange, compact = false }: { value: MediaItem[]; onChange: (next: MediaItem[]) => void; compact?: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState<string[]>([])
   const [dragging, setDragging] = useState(false)
@@ -78,18 +81,47 @@ export default function MediaField({ value, onChange }: { value: MediaItem[]; on
         onDrop={onDrop}
         onClick={() => !uploading.length && inputRef.current?.click()}
         className={cx(
-          'flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors',
+          'flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed text-center transition-colors',
+          compact ? 'flex-row px-3 py-2.5' : 'flex-col px-4 py-6',
           dragging ? 'border-brand-500 bg-brand-50' : 'border-slate-300 bg-slate-50 hover:border-brand-400 hover:bg-white',
         )}
+        title="Imágenes hasta 5 MB · vídeos MP4/MOV/WEBM hasta 100 MB · PDF hasta 25 MB"
       >
-        {uploading.length ? <Loader2 size={22} className="animate-spin text-brand-500" /> : <UploadCloud size={22} className="text-slate-400" />}
-        <p className="text-sm font-medium text-slate-700">{uploading.length ? `Subiendo ${uploading.join(', ')}…` : 'Arrastra aquí o haz clic para subir'}</p>
-        <p className="text-xs text-slate-400">Imágenes hasta 5 MB · vídeos MP4/MOV/WEBM hasta 100 MB · PDF hasta 25 MB</p>
+        {uploading.length ? <Loader2 size={compact ? 16 : 22} className="animate-spin text-brand-500" /> : <UploadCloud size={compact ? 16 : 22} className="text-slate-400" />}
+        <p className={cx('font-medium text-slate-700', compact ? 'text-xs' : 'text-sm')}>{uploading.length ? `Subiendo ${uploading.join(', ')}…` : compact ? 'Arrastra o haz clic para subir imágenes, vídeos o PDF' : 'Arrastra aquí o haz clic para subir'}</p>
+        {!compact ? <p className="text-xs text-slate-400">Imágenes hasta 5 MB · vídeos MP4/MOV/WEBM hasta 100 MB · PDF hasta 25 MB</p> : null}
       </div>
       <input ref={inputRef} type="file" accept={ACCEPT} multiple hidden onChange={(e) => pick(e.target.files)} />
       {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
 
-      {value.length ? (
+      {value.length && compact ? (
+        <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+          {value.map((m) => {
+            const kind = mediaKind(m)
+            return (
+              <li key={m.id} className="flex items-center gap-2.5 px-2 py-1.5">
+                {kind === 'image' ? (
+                  <img src={m.url} alt="" className="size-10 shrink-0 rounded object-cover" />
+                ) : (
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500">{kind === 'pdf' ? <FileText size={16} /> : <Film size={16} />}</span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <a href={m.url} target="_blank" rel="noreferrer" className="block truncate text-xs font-medium text-slate-800 hover:text-brand-600" title={m.name}>
+                    {m.name}
+                  </a>
+                  <p className="text-[10px] text-slate-400">
+                    {networksFor(kind)}
+                    {m.size ? ` · ${mb(m.size)}` : ''}
+                  </p>
+                </div>
+                <button type="button" onClick={() => onChange(value.filter((x) => x.id !== m.id))} title="Quitar archivo" className="rounded-md p-1 text-slate-300 hover:bg-red-50 hover:text-red-600">
+                  <X size={13} />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      ) : value.length ? (
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
           {value.map((m) => {
             const kind = mediaKind(m)
