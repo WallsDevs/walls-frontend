@@ -23,6 +23,7 @@ import {
 } from '../../lib/content'
 import { usePersistedState } from '../../lib/usePersistedState'
 import MediaField from '../../components/MediaField'
+import SocialPreview from '../../components/SocialPreview'
 import { RichTextarea } from '../../components/RichText'
 import {
   Badge,
@@ -267,6 +268,16 @@ function ContentModal({ open, onClose, post, initialDate, pillars }: { open: boo
             <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Archivos</p>
               <MediaField value={media} onChange={setMedia} />
+            </div>
+            <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Vista previa</p>
+              <SocialPreview
+                body={form.body}
+                firstComment={form.firstComment}
+                media={media}
+                format={form.format}
+                networks={form.publications.map((p: Publication) => p.network)}
+              />
             </div>
             <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Dónde se publica</p>
