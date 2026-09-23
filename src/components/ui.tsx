@@ -279,7 +279,8 @@ export const PIPELINE_OUTCOME_TONES: Record<string, BadgeTone> = {
 const MODAL_SIZES = {
   md: 'sm:max-w-lg',
   lg: 'sm:max-w-3xl',
-  xl: 'sm:max-w-[96vw]',
+  xl: 'sm:max-w-6xl',
+  full: 'sm:max-w-[96vw]',
 } as const
 
 export function Modal({
@@ -316,16 +317,16 @@ export function Modal({
         className={cx(
           'relative z-10 flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl',
           MODAL_SIZES[size],
-          size === 'xl' && 'sm:mx-4 sm:max-h-[94vh]',
+          (size === 'xl' || size === 'full') && 'sm:mx-4 sm:max-h-[94vh]',
         )}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-          <h2 className={cx('font-semibold text-slate-900', size === 'xl' ? 'text-lg tracking-tight' : 'text-sm')}>{title}</h2>
+          <h2 className={cx('font-semibold text-slate-900', size === 'xl' || size === 'full' ? 'text-lg tracking-tight' : 'text-sm')}>{title}</h2>
           <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
             <X size={18} />
           </button>
         </div>
-        <div className={cx('overflow-y-auto', size === 'xl' ? 'flex-1 bg-slate-100 px-6 py-5' : 'px-5 py-4')}>{children}</div>
+        <div className={cx('overflow-y-auto', size === 'xl' || size === 'full' ? 'flex-1 bg-slate-100 px-6 py-5' : 'px-5 py-4')}>{children}</div>
         {footer ? (
           <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">{footer}</div>
         ) : null}

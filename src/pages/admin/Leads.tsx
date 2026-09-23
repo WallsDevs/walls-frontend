@@ -885,7 +885,7 @@ export default function Leads() {
       {stageChange.dialog}
       <Modal
         open={!!openLeadId}
-        size="xl"
+        size="full"
         title={(leads || []).find((l: any) => l.documentId === openLeadId)?.companyName || 'Lead'}
         onClose={() => setOpenLeadId(null)}
       >

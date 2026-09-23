@@ -217,7 +217,7 @@ export default function TaskModal({
         open={open}
         onClose={onClose}
         title={task ? (isMeeting ? 'Editar reunión' : 'Editar tarea') : isMeeting ? 'Nueva reunión' : 'Nueva tarea'}
-        size={task ? 'xl' : 'lg'}
+        size={task ? 'full' : 'lg'}
         footer={
           <>
             {task ? (
