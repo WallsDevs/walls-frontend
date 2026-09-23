@@ -230,12 +230,15 @@ export default function SocialPreview({
   firstComment,
   media,
   format,
+  formats,
   networks,
 }: {
   body: string
   firstComment: string
   media: MediaItem[]
   format?: string
+  /** Formato por red (cuando cada red tiene el suyo). */
+  formats?: Record<string, string>
   networks: string[]
 }) {
   const available = ['linkedin', 'instagram']
@@ -245,6 +248,7 @@ export default function SocialPreview({
     if (networks.length && !networks.includes(network)) setNetwork(preferred as any)
   }, [networks.join(',')])
 
+  const activeFormat = (formats && formats[network]) || format
   const bodyLen = plain(body).length
   const limit = network === 'linkedin' ? 3000 : 2200
   const cut = network === 'linkedin' ? 210 : 125
@@ -270,9 +274,9 @@ export default function SocialPreview({
       </div>
       <div className="mx-auto w-full max-w-[560px]">
         {network === 'linkedin' ? (
-          <LinkedInPreview body={body} firstComment={firstComment} media={media} format={format} />
+          <LinkedInPreview body={body} firstComment={firstComment} media={media} format={activeFormat} />
         ) : (
-          <InstagramPreview body={body} firstComment={firstComment} media={media} format={format} />
+          <InstagramPreview body={body} firstComment={firstComment} media={media} format={activeFormat} />
         )}
       </div>
       <p className="mt-2 text-[11px] text-slate-400">

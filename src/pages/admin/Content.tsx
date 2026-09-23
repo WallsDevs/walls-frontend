@@ -49,12 +49,10 @@ const EMPTY_FILTERS: Filters = { search: '', status: '', format: '', pillar: '',
 const NETWORKS = Object.keys(NETWORK_LABELS)
 const pad = (n: number) => String(n).padStart(2, '0')
 
-type Publication = { network: string; url: string; publishAt: string }
+type Publication = { network: string; url: string; publishAt: string; status: string; format: string }
 
 const emptyForm = () => ({
   title: '',
-  status: 'idea',
-  format: '',
   pillar: '',
   body: '',
   firstComment: '',
@@ -105,17 +103,15 @@ function ContentModal({ open, onClose, post, initialDate, pillars }: { open: boo
     if (post) {
       setForm({
         title: post.title || '',
-        status: post.status || 'idea',
-        format: post.format || '',
         pillar: post.pillar?.documentId || '',
         body: post.body || '',
         firstComment: post.firstComment || '',
         designPrompt: post.designPrompt || '',
-        publications: (post.publications || []).map((p: any) => ({ network: p.network, url: p.url || '', publishAt: toLocalInput(p.publishAt) })),
+        publications: (post.publications || []).map((p: any) => ({ network: p.network, url: p.url || '', publishAt: toLocalInput(p.publishAt), status: p.status || post.status || 'idea', format: p.format || post.format || '' })),
       })
       setMedia((post.media || []).map((m: any) => ({ id: m.id, url: m.url, name: m.name, mime: m.mime, size: m.size ? m.size * 1024 : undefined })))
     } else {
-      setForm({ ...emptyForm(), publications: initialDate ? [{ network: 'linkedin', url: '', publishAt: `${initialDate}T10:00` }] : [] })
+      setForm({ ...emptyForm(), publications: initialDate ? [{ network: 'linkedin', url: '', publishAt: `${initialDate}T10:00`, status: 'idea', format: '' }] : [] })
       setMedia([])
     }
   }, [open, post, initialDate])
@@ -128,9 +124,14 @@ function ContentModal({ open, onClose, post, initialDate, pillars }: { open: boo
     )
   const toggleNetwork = (network: string) => {
     const has = form.publications.some((p: Publication) => p.network === network)
-    // Al activar una red nueva se propone la fecha de la otra (suele ser el mismo día).
-    const suggested = form.publications.find((p: Publication) => p.publishAt)?.publishAt || ''
-    set('publications', has ? form.publications.filter((p: Publication) => p.network !== network) : [...form.publications, { network, url: '', publishAt: suggested }])
+    // Al activar una red nueva se proponen la fecha, el estado y el formato de la otra (suelen coincidir).
+    const other: Publication | undefined = form.publications[0]
+    set(
+      'publications',
+      has
+        ? form.publications.filter((p: Publication) => p.network !== network)
+        : [...form.publications, { network, url: '', publishAt: other?.publishAt || '', status: other?.status || 'idea', format: other?.format || '' }],
+    )
   }
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['content-posts'] })
@@ -139,13 +140,11 @@ function ContentModal({ open, onClose, post, initialDate, pillars }: { open: boo
     mutationFn: () => {
       const data = {
         title: form.title.trim(),
-        status: form.status,
-        format: form.format || null,
         pillar: form.pillar || null,
         body: form.body || null,
         firstComment: form.firstComment || null,
         designPrompt: form.designPrompt || null,
-        publications: form.publications.map((p: Publication) => ({ network: p.network, url: p.url?.trim() || null, publishAt: fromLocalInput(p.publishAt) })),
+        publications: form.publications.map((p: Publication) => ({ network: p.network, url: p.url?.trim() || null, publishAt: fromLocalInput(p.publishAt), status: p.status || 'idea', format: p.format || null })),
         media: media.map((m) => m.id),
       }
       return post ? rest.update('content-posts', post.documentId, data) : rest.create('content-posts', data)
@@ -194,26 +193,7 @@ function ContentModal({ open, onClose, post, initialDate, pillars }: { open: boo
             <Field label="Título *">
               <Input value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="Tu web tiene visitas, pero no ventas" autoFocus={!post} />
             </Field>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <Field label="Estado">
-                <Select value={form.status} onChange={(e) => set('status', e.target.value)}>
-                  {CONTENT_STATUS_ORDER.map((s) => (
-                    <option key={s} value={s}>
-                      {CONTENT_STATUS_LABELS[s]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Formato">
-                <Select value={form.format} onChange={(e) => set('format', e.target.value)}>
-                  <option value="">—</option>
-                  {Object.entries(CONTENT_FORMAT_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+            <div className="grid grid-cols-2 gap-3">
               <Field label="Pilar">
                 <Select value={form.pillar} onChange={(e) => set('pillar', e.target.value)}>
                   <option value="">—</option>
@@ -259,7 +239,7 @@ function ContentModal({ open, onClose, post, initialDate, pillars }: { open: boo
           <div className="space-y-4 self-start">
             <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Dónde y cuándo se publica</p>
-              <p className="mb-3 text-xs text-slate-400">Cada red tiene su propia fecha y hora. Cuando esté publicado, pega el enlace al post.</p>
+              <p className="mb-3 text-xs text-slate-400">Cada red tiene su propio estado, formato, fecha y hora. Cuando esté publicado, pega el enlace al post.</p>
               <div className="space-y-2">
                 {NETWORKS.map((n) => {
                   const idx = form.publications.findIndex((p: Publication) => p.network === n)
@@ -274,6 +254,23 @@ function ContentModal({ open, onClose, post, initialDate, pillars }: { open: boo
                       </label>
                       {on ? (
                         <div className="mt-2 grid gap-2 sm:grid-cols-[auto_1fr]">
+                          <div className="flex gap-2 sm:col-span-2">
+                            <Select value={form.publications[idx].status} onChange={(e) => setPub(idx, 'status', e.target.value)} className="py-1.5 text-xs" style={{ width: '9.5rem' }} title="Estado en esta red">
+                              {CONTENT_STATUS_ORDER.map((st) => (
+                                <option key={st} value={st}>
+                                  {CONTENT_STATUS_LABELS[st]}
+                                </option>
+                              ))}
+                            </Select>
+                            <Select value={form.publications[idx].format} onChange={(e) => setPub(idx, 'format', e.target.value)} className="py-1.5 text-xs" style={{ width: '9.5rem' }} title="Formato en esta red">
+                              <option value="">Formato…</option>
+                              {Object.entries(CONTENT_FORMAT_LABELS).map(([k, v]) => (
+                                <option key={k} value={k}>
+                                  {v}
+                                </option>
+                              ))}
+                            </Select>
+                          </div>
                           <Input
                             type="datetime-local"
                             value={form.publications[idx].publishAt}
@@ -309,7 +306,7 @@ function ContentModal({ open, onClose, post, initialDate, pillars }: { open: boo
                 body={form.body}
                 firstComment={form.firstComment}
                 media={media}
-                format={form.format}
+                formats={Object.fromEntries(form.publications.map((p: Publication) => [p.network, p.format]))}
                 networks={form.publications.map((p: Publication) => p.network)}
               />
             </div>
@@ -359,8 +356,9 @@ export default function Content() {
     const q = f.search.toLowerCase()
     return (posts || []).filter((p: any) => {
       if (q && !(p.title || '').toLowerCase().includes(q) && !(p.body || '').toLowerCase().includes(q)) return false
-      if (f.status && p.status !== f.status) return false
-      if (f.format && p.format !== f.format) return false
+      const pubs = (p.publications || []).filter((x: any) => !f.network || x.network === f.network)
+      if (f.status && !(pubs.length ? pubs.some((x: any) => (x.status || p.status) === f.status) : p.status === f.status)) return false
+      if (f.format && !(pubs.length ? pubs.some((x: any) => (x.format || p.format) === f.format) : p.format === f.format)) return false
       if (f.pillar && p.pillar?.documentId !== f.pillar) return false
       if (f.network && !(p.publications || []).some((x: any) => x.network === f.network)) return false
       return true
@@ -384,15 +382,16 @@ export default function Content() {
     return days
   }, [month])
   // Una entrada por red y fecha: la misma pieza puede ir a LinkedIn un día y a Instagram otro.
-  type Entry = { post: any; network: string; publishAt: string }
+  type Entry = { post: any; network: string; publishAt: string; status: string; format?: string }
   const byDay = useMemo(() => {
     const map = new Map<string, Entry[]>()
     for (const p of filtered) {
       for (const x of p.publications || []) {
         if (!x.publishAt || (f.network && x.network !== f.network)) continue
+        if (f.status && (x.status || p.status) !== f.status) continue
         const k = localDateKey(x.publishAt)
         if (!map.has(k)) map.set(k, [])
-        map.get(k)!.push({ post: p, network: x.network, publishAt: x.publishAt })
+        map.get(k)!.push({ post: p, network: x.network, publishAt: x.publishAt, status: x.status || p.status, format: x.format || p.format })
       }
     }
     for (const list of map.values()) list.sort((a, b) => String(a.publishAt).localeCompare(String(b.publishAt)))
@@ -407,13 +406,13 @@ export default function Content() {
     const [docId, network] = draggingId.split('|')
     const p = (posts || []).find((x: any) => x.documentId === docId)
     if (!p) return
-    const pubs: any[] = (p.publications || []).map((x: any) => ({ network: x.network, url: x.url || null, publishAt: x.publishAt || null }))
+    const pubs: any[] = (p.publications || []).map((x: any) => ({ network: x.network, url: x.url || null, publishAt: x.publishAt || null, status: x.status || p.status || 'idea', format: x.format || p.format || null }))
     if (network) {
       const target = pubs.find((x) => x.network === network)
       if (target) target.publishAt = fromLocalInput(`${dayKey}T${target.publishAt ? localTime(target.publishAt) : '10:00'}`)
     } else {
       // Pieza sin fecha: se planifican todas sus redes ese día (o LinkedIn si no tenía ninguna).
-      if (!pubs.length) pubs.push({ network: 'linkedin', url: null, publishAt: null })
+      if (!pubs.length) pubs.push({ network: 'linkedin', url: null, publishAt: null, status: p.status || 'idea', format: p.format || null })
       for (const x of pubs) if (!x.publishAt) x.publishAt = fromLocalInput(`${dayKey}T10:00`)
     }
     patchMutation.mutate({ id: p.documentId, data: { publications: pubs } })
@@ -423,7 +422,7 @@ export default function Content() {
 
   const cardMedia = (p: any) => (p.media || [])[0]
 
-  const renderMini = (p: any, network?: string, when?: string) => {
+  const renderMini = (p: any, network?: string, when?: string, status?: string) => {
     const key = `${p.documentId}|${network || ''}`
     return (
       <button
@@ -444,7 +443,7 @@ export default function Content() {
           draggingId === key && 'opacity-40',
         )}
       >
-        <span className="size-2 shrink-0 rounded-full" style={{ background: CONTENT_STATUS_DOT[p.status] }} />
+        <span className="size-2 shrink-0 rounded-full" style={{ background: CONTENT_STATUS_DOT[status || p.status] }} />
         <span className="truncate">{p.title}</span>
         {network ? (
           <span className={cx('ml-auto shrink-0 rounded px-1 text-[9px] font-bold uppercase', network === 'linkedin' ? 'bg-[#0a66c2]/10 text-[#0a66c2]' : 'bg-pink-500/10 text-pink-600')}>
@@ -459,16 +458,19 @@ export default function Content() {
     )
   }
 
-  const renderCard = (p: any) => {
+  /** Card del tablero: una por red, con el estado y formato de esa red. */
+  const renderCard = (p: any, x: any) => {
     const m = cardMedia(p)
     const kind = m ? mediaKind(m) : null
+    const key = `${p.documentId}|${x.network}`
+    const format = x.format || p.format
     return (
       <button
-        key={p.documentId}
+        key={key}
         draggable
         onDragStart={(e) => {
-          e.dataTransfer.setData('text/plain', p.documentId)
-          setDraggingId(p.documentId)
+          e.dataTransfer.setData('text/plain', key)
+          setDraggingId(key)
         }}
         onDragEnd={() => {
           setDraggingId(null)
@@ -477,7 +479,7 @@ export default function Content() {
         onClick={() => setModal({ open: true, post: p })}
         className={cx(
           'w-full overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-sm transition-shadow hover:shadow-md',
-          draggingId === p.documentId && 'opacity-40',
+          draggingId === key && 'opacity-40',
         )}
       >
         {m && kind === 'image' ? (
@@ -488,11 +490,14 @@ export default function Content() {
           </div>
         ) : null}
         <div className="p-3">
-          <p className="mb-1.5 text-sm font-medium leading-snug text-slate-900">{p.title}</p>
+          <div className="mb-1.5 flex items-start gap-2">
+            <p className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-900">{p.title}</p>
+            <Badge tone={NETWORK_TONES[x.network] || 'gray'}>{NETWORK_LABELS[x.network]}</Badge>
+          </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            {p.format ? (
+            {format ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                <FormatIcon format={p.format} size={11} /> {CONTENT_FORMAT_LABELS[p.format]}
+                <FormatIcon format={format} size={11} /> {CONTENT_FORMAT_LABELS[format]}
               </span>
             ) : null}
             {p.pillar ? (
@@ -500,20 +505,11 @@ export default function Content() {
                 <span className="size-1.5 rounded-full" style={{ background: p.pillar.color || '#94a3b8' }} /> {p.pillar.name}
               </span>
             ) : null}
-            {(p.publications || []).filter((x: any) => !x.publishAt).map((x: any) => (
-              <Badge key={x.network} tone={NETWORK_TONES[x.network] || 'gray'}>
-                {NETWORK_LABELS[x.network]}
-              </Badge>
-            ))}
           </div>
-          {(p.publications || []).some((x: any) => x.publishAt) ? (
-            <div className="mt-1.5 space-y-0.5 text-xs text-slate-400">
-              {(p.publications || []).filter((x: any) => x.publishAt).map((x: any) => (
-                <p key={x.network}>
-                  <span className="font-medium text-slate-500">{NETWORK_LABELS[x.network]}</span> · {shortDay(x.publishAt)} · {localTime(x.publishAt)}
-                </p>
-              ))}
-            </div>
+          {x.publishAt ? (
+            <p className="mt-1.5 text-xs text-slate-400">
+              {shortDay(x.publishAt)} · {localTime(x.publishAt)}
+            </p>
           ) : (
             <p className="mt-1.5 text-xs text-amber-600">Sin fecha</p>
           )}
@@ -522,15 +518,50 @@ export default function Content() {
     )
   }
 
+  /** Cambia el estado de una red (arrastrar en el tablero). */
+  const setNetworkStatus = (key: string, status: string) => {
+    const [docId, network] = key.split('|')
+    const p = (posts || []).find((x: any) => x.documentId === docId)
+    if (!p) return
+    const pubs = (p.publications || []).map((x: any) => ({
+      network: x.network,
+      url: x.url || null,
+      publishAt: x.publishAt || null,
+      status: x.network === network ? status : x.status || p.status || 'idea',
+      format: x.format || p.format || null,
+    }))
+    patchMutation.mutate({ id: p.documentId, data: { publications: pubs } })
+  }
+
+  // Entradas del tablero: una por red; las piezas sin red aparecen una sola vez con su estado general.
+  const boardEntries = useMemo(() => {
+    const out: { post: any; pub: any }[] = []
+    for (const p of filtered) {
+      const pubs = (p.publications || []).filter((x: any) => !f.network || x.network === f.network)
+      if (!pubs.length) out.push({ post: p, pub: { network: '', status: p.status, format: p.format, publishAt: null } })
+      for (const x of pubs) out.push({ post: p, pub: { ...x, status: x.status || p.status, format: x.format || p.format } })
+    }
+    return out
+  }, [filtered, f.network])
+
   if (isLoading) return <PageLoader />
 
-  const counts = CONTENT_STATUS_ORDER.reduce<Record<string, number>>((acc, s) => ({ ...acc, [s]: (posts || []).filter((p: any) => p.status === s).length }), {})
+  // Conteos por estado contando cada red por separado (una pieza puede estar publicada en una red y programada en otra).
+  const counts = CONTENT_STATUS_ORDER.reduce<Record<string, number>>((acc, s) => {
+    let n = 0
+    for (const p of posts || []) {
+      const pubs = p.publications || []
+      if (!pubs.length) n += p.status === s ? 1 : 0
+      else n += pubs.filter((x: any) => (x.status || p.status) === s).length
+    }
+    return { ...acc, [s]: n }
+  }, {})
 
   return (
     <div>
       <PageHeader
         title="Contenido"
-        subtitle={`${(posts || []).length} publicaciones · ${counts.publicado} publicadas · ${counts.programado} programadas`}
+        subtitle={`${(posts || []).length} piezas · ${counts.publicado} publicadas · ${counts.programado} programadas (contando cada red)`}
         actions={
           <>
             <div className="flex rounded-lg border border-slate-200 bg-white p-0.5">
@@ -693,7 +724,7 @@ export default function Content() {
                         <Plus size={12} />
                       </button>
                     </div>
-                    <div className="space-y-1">{list.map((e) => renderMini(e.post, e.network, e.publishAt))}</div>
+                    <div className="space-y-1">{list.map((e) => renderMini(e.post, e.network, e.publishAt, e.status))}</div>
                   </div>
                 )
               })}
@@ -704,7 +735,7 @@ export default function Content() {
       ) : view === 'board' ? (
         <div className="grid gap-3 overflow-x-auto" style={{ gridTemplateColumns: `repeat(${CONTENT_STATUS_ORDER.length}, minmax(200px, 1fr))` }}>
           {CONTENT_STATUS_ORDER.map((s) => {
-            const list = filtered.filter((p: any) => p.status === s)
+            const list = boardEntries.filter((e) => e.pub.status === s)
             return (
               <div
                 key={s}
@@ -715,7 +746,10 @@ export default function Content() {
                 onDragLeave={() => setDragOver((k) => (k === s ? null : k))}
                 onDrop={(e) => {
                   e.preventDefault()
-                  if (draggingId) patchMutation.mutate({ id: draggingId, data: { status: s } })
+                  if (draggingId) {
+                    if (draggingId.includes('|') && draggingId.split('|')[1]) setNetworkStatus(draggingId, s)
+                    else patchMutation.mutate({ id: draggingId.split('|')[0], data: { status: s } })
+                  }
                   setDraggingId(null)
                   setDragOver(null)
                 }}
@@ -729,7 +763,7 @@ export default function Content() {
                   <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500">{list.length}</span>
                 </div>
                 <div className="max-h-[70vh] space-y-2 overflow-y-auto pr-0.5">
-                  {list.map(renderCard)}
+                  {list.map((e) => (e.pub.network ? renderCard(e.post, e.pub) : renderCard(e.post, { ...e.pub, network: '' })))}
                   {!list.length ? <p className="py-6 text-center text-xs text-slate-400">Vacío</p> : null}
                 </div>
               </div>
@@ -757,9 +791,32 @@ export default function Content() {
                   <tr key={p.documentId} onClick={() => setModal({ open: true, post: p })} className="cursor-pointer hover:bg-slate-50">
                     <td className="px-4 py-2.5 font-medium text-slate-900">{p.title}</td>
                     <td className="px-4 py-2.5">
-                      <Badge tone={CONTENT_STATUS_TONES[p.status]}>{CONTENT_STATUS_LABELS[p.status]}</Badge>
+                      {(p.publications || []).length ? (
+                        <span className="flex flex-col gap-1">
+                          {(p.publications || []).map((x: any) => (
+                            <span key={x.network} className="inline-flex items-center gap-1.5 text-xs">
+                              <span className="w-16 text-slate-500">{NETWORK_LABELS[x.network]}</span>
+                              <Badge tone={CONTENT_STATUS_TONES[x.status || p.status]}>{CONTENT_STATUS_LABELS[x.status || p.status]}</Badge>
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <Badge tone={CONTENT_STATUS_TONES[p.status]}>{CONTENT_STATUS_LABELS[p.status]}</Badge>
+                      )}
                     </td>
-                    <td className="px-4 py-2.5 text-slate-600">{p.format ? CONTENT_FORMAT_LABELS[p.format] : '—'}</td>
+                    <td className="px-4 py-2.5 text-slate-600">
+                      {(p.publications || []).length ? (
+                        <span className="flex flex-col gap-1 text-xs">
+                          {(p.publications || []).map((x: any) => (
+                            <span key={x.network}>{x.format || p.format ? CONTENT_FORMAT_LABELS[x.format || p.format] : '—'}</span>
+                          ))}
+                        </span>
+                      ) : p.format ? (
+                        CONTENT_FORMAT_LABELS[p.format]
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-slate-600">{p.pillar?.name || '—'}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-slate-600">
                       {(p.publications || []).some((x: any) => x.publishAt) ? (
