@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, ExternalLink, Film, FileText, Image as ImageIcon, LayoutGrid, List, Megaphone, Plus, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, ExternalLink, Film, FileText, Image as ImageIcon, LayoutGrid, List, Megaphone, Plus, Sparkles, Tags, Trash2 } from 'lucide-react'
 import { rest } from '../../lib/api'
 import {
   CONTENT_FORMAT_LABELS,
-  CONTENT_PILLAR_LABELS,
   CONTENT_STATUS_DOT,
   CONTENT_STATUS_LABELS,
   CONTENT_STATUS_ORDER,
@@ -58,6 +58,7 @@ const emptyForm = () => ({
   publishAt: '',
   body: '',
   firstComment: '',
+  designPrompt: '',
   publications: [] as Publication[],
 })
 
@@ -93,7 +94,7 @@ function FormatIcon({ format, size = 13 }: { format?: string; size?: number }) {
 }
 
 /** Crear / editar una pieza de contenido. Formulario a la izquierda, archivos y publicación a la derecha. */
-function ContentModal({ open, onClose, post, initialDate }: { open: boolean; onClose: () => void; post?: any | null; initialDate?: string }) {
+function ContentModal({ open, onClose, post, initialDate, pillars }: { open: boolean; onClose: () => void; post?: any | null; initialDate?: string; pillars: any[] }) {
   const qc = useQueryClient()
   const [form, setForm] = useState<any>(emptyForm())
   const [media, setMedia] = useState<MediaItem[]>([])
@@ -106,10 +107,11 @@ function ContentModal({ open, onClose, post, initialDate }: { open: boolean; onC
         title: post.title || '',
         status: post.status || 'idea',
         format: post.format || '',
-        pillar: post.pillar || '',
+        pillar: post.pillar?.documentId || '',
         publishAt: toLocalInput(post.publishAt),
         body: post.body || '',
         firstComment: post.firstComment || '',
+        designPrompt: post.designPrompt || '',
         publications: (post.publications || []).map((p: any) => ({ network: p.network, url: p.url || '' })),
       })
       setMedia((post.media || []).map((m: any) => ({ id: m.id, url: m.url, name: m.name, mime: m.mime, size: m.size ? m.size * 1024 : undefined })))
@@ -142,6 +144,7 @@ function ContentModal({ open, onClose, post, initialDate }: { open: boolean; onC
         publishAt: fromLocalInput(form.publishAt),
         body: form.body || null,
         firstComment: form.firstComment || null,
+        designPrompt: form.designPrompt || null,
         publications: form.publications.map((p: Publication) => ({ network: p.network, url: p.url?.trim() || null })),
         media: media.map((m) => m.id),
       }
@@ -215,9 +218,9 @@ function ContentModal({ open, onClose, post, initialDate }: { open: boolean; onC
               <Field label="Pilar">
                 <Select value={form.pillar} onChange={(e) => set('pillar', e.target.value)}>
                   <option value="">—</option>
-                  {Object.entries(CONTENT_PILLAR_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
+                  {pillars.map((p: any) => (
+                    <option key={p.documentId} value={p.documentId}>
+                      {p.name}
                     </option>
                   ))}
                 </Select>
@@ -242,6 +245,20 @@ function ContentModal({ open, onClose, post, initialDate }: { open: boolean; onC
                 <CopyButton text={form.firstComment} label="Copiar comentario" />
               </div>
               <Textarea value={form.firstComment} onChange={(e) => set('firstComment', e.target.value)} placeholder="Los enlaces van aquí, nunca en el texto" className="min-h-20" />
+            </div>
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700">
+                  <Sparkles size={14} className="text-violet-500" /> Prompt de diseño
+                </span>
+                <CopyButton text={form.designPrompt} label="Copiar prompt" />
+              </div>
+              <Textarea
+                value={form.designPrompt}
+                onChange={(e) => set('designPrompt', e.target.value)}
+                placeholder="Instrucciones para Claude Design: formato, diapositivas, textos, qué adjuntar…"
+                className="min-h-28 font-mono text-xs"
+              />
             </div>
             {saveMutation.error ? <ErrorNote error={saveMutation.error} /> : null}
           </div>
@@ -308,8 +325,13 @@ export default function Content() {
 
   const { data: posts, isLoading } = useQuery({
     queryKey: ['content-posts'],
-    queryFn: () => rest.listAll('content-posts', { populate: { media: true, publications: true }, sort: 'publishAt:desc' }),
+    queryFn: () => rest.listAll('content-posts', { populate: { media: true, publications: true, pillar: true }, sort: 'publishAt:desc' }),
   })
+  const { data: pillars } = useQuery({
+    queryKey: ['content-pillars'],
+    queryFn: () => rest.list('content-pillars', { sort: 'position:asc', pagination: { pageSize: 100 } }),
+  })
+  const pillarList: any[] = pillars || []
 
   const patchMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => rest.update('content-posts', id, data),
@@ -322,7 +344,7 @@ export default function Content() {
       if (q && !(p.title || '').toLowerCase().includes(q) && !(p.body || '').toLowerCase().includes(q)) return false
       if (f.status && p.status !== f.status) return false
       if (f.format && p.format !== f.format) return false
-      if (f.pillar && p.pillar !== f.pillar) return false
+      if (f.pillar && p.pillar?.documentId !== f.pillar) return false
       if (f.network && !(p.publications || []).some((x: any) => x.network === f.network)) return false
       return true
     })
@@ -434,7 +456,11 @@ export default function Content() {
                 <FormatIcon format={p.format} size={11} /> {CONTENT_FORMAT_LABELS[p.format]}
               </span>
             ) : null}
-            {p.pillar ? <span className="text-[11px] text-slate-400">{CONTENT_PILLAR_LABELS[p.pillar]}</span> : null}
+            {p.pillar ? (
+              <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                <span className="size-1.5 rounded-full" style={{ background: p.pillar.color || '#94a3b8' }} /> {p.pillar.name}
+              </span>
+            ) : null}
             {(p.publications || []).map((x: any) => (
               <Badge key={x.network} tone={NETWORK_TONES[x.network] || 'gray'}>
                 {NETWORK_LABELS[x.network]}
@@ -510,9 +536,9 @@ export default function Content() {
         </Select>
         <Select value={f.pillar} onChange={(e) => setF('pillar', e.target.value)} className="w-full sm:w-auto" style={{ maxWidth: '100%' }}>
           <option value="">Todos los pilares</option>
-          {Object.entries(CONTENT_PILLAR_LABELS).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
+          {pillarList.map((p: any) => (
+            <option key={p.documentId} value={p.documentId}>
+              {p.name}
             </option>
           ))}
         </Select>
@@ -529,6 +555,9 @@ export default function Content() {
             Limpiar filtros
           </button>
         ) : null}
+        <Link to="/content-pillars" className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700">
+          <Tags size={15} /> Configurar pilares
+        </Link>
       </div>
 
       {!(posts || []).length ? (
@@ -683,7 +712,7 @@ export default function Content() {
                       <Badge tone={CONTENT_STATUS_TONES[p.status]}>{CONTENT_STATUS_LABELS[p.status]}</Badge>
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{p.format ? CONTENT_FORMAT_LABELS[p.format] : '—'}</td>
-                    <td className="px-4 py-2.5 text-slate-600">{p.pillar ? CONTENT_PILLAR_LABELS[p.pillar] : '—'}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{p.pillar?.name || '—'}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-slate-600">{p.publishAt ? `${shortDay(p.publishAt)} · ${localTime(p.publishAt)}` : <span className="text-amber-600">Sin fecha</span>}</td>
                     <td className="px-4 py-2.5">
                       <span className="flex flex-wrap gap-1">
@@ -721,7 +750,7 @@ export default function Content() {
         </div>
       ) : null}
 
-      <ContentModal open={modal.open} onClose={() => setModal({ open: false })} post={modal.post} initialDate={modal.date} />
+      <ContentModal open={modal.open} onClose={() => setModal({ open: false })} post={modal.post} initialDate={modal.date} pillars={pillarList} />
     </div>
   )
 }

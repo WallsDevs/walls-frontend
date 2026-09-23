@@ -40,15 +40,6 @@ export const CONTENT_FORMAT_LABELS: Record<string, string> = {
   encuesta: 'Encuesta',
 }
 
-export const CONTENT_PILLAR_LABELS: Record<string, string> = {
-  portafolio: 'Portafolio',
-  automatizacion_ia: 'Automatización e IA',
-  mantenimiento: 'Mantenimiento',
-  criterio: 'Criterio',
-  tendencias: 'Tendencias y normativa',
-  interaccion: 'Interacción',
-}
-
 export const NETWORK_LABELS: Record<string, string> = {
   linkedin: 'LinkedIn',
   instagram: 'Instagram',
