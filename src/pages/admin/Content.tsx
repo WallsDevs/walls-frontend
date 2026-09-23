@@ -563,7 +563,25 @@ export default function Content() {
       {!(posts || []).length ? (
         <EmptyState icon={Megaphone} title="Todavía no hay contenido" description="Crea la primera publicación o planifica el mes en el calendario." />
       ) : view === 'calendar' ? (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="space-y-3">
+          {/* Sin fecha: siempre visible encima del calendario, para arrastrar cada pieza a su día */}
+          <div className={cx('rounded-xl border p-3 shadow-sm', unscheduled.length ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-white')}>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <p className={cx('text-xs font-semibold uppercase tracking-wide', unscheduled.length ? 'text-amber-700' : 'text-slate-500')}>Sin fecha ({unscheduled.length})</p>
+              {unscheduled.length ? (
+                <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                  {unscheduled.map((p: any) => (
+                    <div key={p.documentId} className="w-56">
+                      {renderMini(p)}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">Todo lo pendiente tiene fecha.</p>
+              )}
+              {unscheduled.length ? <p className="w-full text-[11px] text-amber-700/70">Arrástralas a un día del calendario para planificarlas, o haz clic para ponerles fecha.</p> : null}
+            </div>
+          </div>
           <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-1">
@@ -575,9 +593,22 @@ export default function Content() {
                 </button>
                 <h2 className="ml-1 text-sm font-semibold text-slate-900">{monthTitle(month.y, month.m)}</h2>
               </div>
-              <button onClick={() => setMonth({ y: now.getFullYear(), m: now.getMonth() })} className="text-xs font-medium text-brand-600 hover:text-brand-700">
-                Hoy
-              </button>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {CONTENT_STATUS_ORDER.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setF('status', f.status === s ? '' : s)}
+                    title={`Ver solo ${CONTENT_STATUS_LABELS[s].toLowerCase()}`}
+                    className={cx('inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px]', f.status === s ? 'border-brand-400 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}
+                  >
+                    <span className="size-2 rounded-full" style={{ background: CONTENT_STATUS_DOT[s] }} />
+                    {CONTENT_STATUS_LABELS[s]} <span className="text-slate-400">{counts[s]}</span>
+                  </button>
+                ))}
+                <button onClick={() => setMonth({ y: now.getFullYear(), m: now.getMonth() })} className="ml-2 text-xs font-medium text-brand-600 hover:text-brand-700">
+                  Hoy
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
               {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d) => (
@@ -625,32 +656,6 @@ export default function Content() {
               })}
             </div>
             <p className="mt-2 text-[11px] text-slate-400">Arrastra una publicación a otro día para reprogramarla · doble clic en un día para crear · el punto de color es el estado</p>
-          </div>
-          <div className="space-y-3 self-start">
-            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Estados</p>
-              <div className="flex flex-wrap gap-1.5">
-                {CONTENT_STATUS_ORDER.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setF('status', f.status === s ? '' : s)}
-                    className={cx('inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs', f.status === s ? 'border-brand-400 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}
-                  >
-                    <span className="size-2 rounded-full" style={{ background: CONTENT_STATUS_DOT[s] }} />
-                    {CONTENT_STATUS_LABELS[s]} <span className="text-slate-400">{counts[s]}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 shadow-sm">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700">Sin fecha ({unscheduled.length})</p>
-              {unscheduled.length ? (
-                <div className="space-y-1">{unscheduled.map(renderMini)}</div>
-              ) : (
-                <p className="text-xs text-amber-700/70">Todo lo pendiente tiene fecha.</p>
-              )}
-              <p className="mt-2 text-[11px] text-amber-700/70">Arrástralas a un día del calendario para planificarlas.</p>
-            </div>
           </div>
         </div>
       ) : view === 'board' ? (
