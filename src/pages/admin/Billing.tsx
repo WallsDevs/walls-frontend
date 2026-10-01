@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ArrowRight, Briefcase, CheckCircle2, Eye, FileText, Receipt, Wallet } from 'lucide-react'
 import { api, rest } from '../../lib/api'
@@ -24,124 +24,33 @@ import {
   INVOICE_STATUS_TONES,
 } from '../../components/ui'
 
-function UnbilledTab() {
-  const qc = useQueryClient()
-  const [project, setProject] = useState('')
-  const [periodStart, setPeriodStart] = useState(monthStartISO())
-  const [periodEnd, setPeriodEnd] = useState(monthEndISO())
-  const [notes, setNotes] = useState('')
-  const [includeCarryOver, setIncludeCarryOver] = useState(false)
-  const [result, setResult] = useState<any | null>(null)
-
-  const { data: projects } = useQuery({
-    queryKey: ['projects-min'],
-    queryFn: () => rest.list('projects', { sort: 'name:asc', pagination: { pageSize: 100 } }),
-  })
-
-  const { data: preview, isFetching, error } = useQuery({
-    queryKey: ['unbilled', project, periodStart, periodEnd],
-    queryFn: () => api(`/billing/unbilled?project=${project}&periodStart=${periodStart}&periodEnd=${periodEnd}`),
-    enabled: !!project,
-  })
-
-  const generateMutation = useMutation({
-    mutationFn: () =>
-      api('/billing/generate', {
-        method: 'POST',
-        body: { project, periodStart, periodEnd, notes: notes || undefined, includeCarryOver },
-      }),
-    onSuccess: (res) => {
-      setResult(res)
-      setNotes('')
-      qc.invalidateQueries({ queryKey: ['unbilled'] })
-      qc.invalidateQueries({ queryKey: ['invoices'] })
-      qc.invalidateQueries({ queryKey: ['reports'] })
-      qc.invalidateQueries({ queryKey: ['dashboard'] })
-      qc.invalidateQueries({ queryKey: ['project-entries'] })
-    },
-  })
-
+/** Vista previa de lo facturable de UN proyecto: avisos, tabla de developers y entregables. */
+function ProjectPreview({
+  preview,
+  periodStart,
+  includeCarryOver,
+  setIncludeCarryOver,
+  title,
+}: {
+  preview: any
+  periodStart: string
+  includeCarryOver: boolean
+  setIncludeCarryOver: (v: boolean) => void
+  title?: string
+}) {
   const carried = preview?.carried
   const hasCarried = (carried?.hours || 0) > 0
-
   const billableRows = (preview?.rows || []).filter((r: any) =>
-    r.billingType === 'fixed'
-      ? !r.alreadyBilled
-      : (includeCarryOver ? r.hoursInPeriod + r.hoursCarried : r.hoursInPeriod) > 0,
+    r.billingType === 'fixed' ? !r.alreadyBilled : (includeCarryOver ? r.hoursInPeriod + r.hoursCarried : r.hoursInPeriod) > 0,
   )
-
-  // Lo que realmente se va a facturar según el check de horas arrastradas
   const shownTotals = {
     clientTotal: (preview?.totals?.clientTotal || 0) + (includeCarryOver ? carried?.clientTotal || 0 : 0),
     devTotal: (preview?.totals?.devTotal || 0) + (includeCarryOver ? carried?.devTotal || 0 : 0),
     agencyProfit: (preview?.totals?.agencyProfit || 0) + (includeCarryOver ? carried?.agencyProfit || 0 : 0),
   }
-
   return (
-    <div>
-      <Card className="mb-4 p-4">
-        <div className="grid gap-3 sm:grid-cols-[1fr_150px_150px]">
-          <Field label="Proyecto">
-            <Select
-              value={project}
-              onChange={(e) => {
-                setProject(e.target.value)
-                setResult(null)
-              }}
-            >
-              <option value="">Selecciona un proyecto…</option>
-              {(projects || []).map((p: any) => (
-                <option key={p.documentId} value={p.documentId}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Inicio del período">
-            <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
-          </Field>
-          <Field label="Fin del período">
-            <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
-          </Field>
-        </div>
-      </Card>
-
-      {result ? (
-        <Card className="mb-4 border-emerald-200 bg-emerald-50 p-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <CheckCircle2 className="text-emerald-600" size={20} />
-            <div className="flex-1 text-sm">
-              <p className="font-semibold text-emerald-800">
-                Se generó la factura {result.invoice.number} y el reporte de pago {result.paymentReport.number}
-              </p>
-              <p className="text-emerald-700">
-                {result.billedEntries} registros de horas marcados como facturados.
-                {result.skipped?.length ? ` ${result.skipped.length} devs sin asignación quedaron fuera.` : ''}
-              </p>
-            </div>
-            <Link to={`/billing/invoices/${result.invoice.documentId}`}>
-              <Button size="sm" variant="secondary" icon={Eye}>
-                Ver factura
-              </Button>
-            </Link>
-          </div>
-        </Card>
-      ) : null}
-
-      {!project ? (
-        <EmptyState
-          icon={Receipt}
-          title="Escoge un proyecto"
-          description="Verás las horas sin facturar de cada developer con su esquema de pago, y podrás generar la factura y el reporte de pago en un solo paso."
-        />
-      ) : isFetching && !preview ? (
-        <div className="flex h-40 items-center justify-center">
-          <Spinner />
-        </div>
-      ) : error ? (
-        <ErrorNote error={error} />
-      ) : preview ? (
-        <>
+    <div className="mb-6">
+      {title ? <h3 className="mb-2 text-sm font-semibold text-slate-900">{title}</h3> : null}
           {preview.existingInvoices?.length ? (
             <Card className="mb-4 border-brand-200 bg-brand-50 p-4">
               <div className="flex gap-2.5 text-sm text-brand-800">
@@ -374,27 +283,198 @@ function UnbilledTab() {
             </Card>
           ) : null}
 
+    </div>
+  )
+}
+
+/** Totales facturables de un preview según el check de horas arrastradas. */
+function previewTotals(preview: any, includeCarryOver: boolean) {
+  const carried = preview?.carried
+  return {
+    clientTotal: (preview?.totals?.clientTotal || 0) + (includeCarryOver ? carried?.clientTotal || 0 : 0),
+    devTotal: (preview?.totals?.devTotal || 0) + (includeCarryOver ? carried?.devTotal || 0 : 0),
+    agencyProfit: (preview?.totals?.agencyProfit || 0) + (includeCarryOver ? carried?.agencyProfit || 0 : 0),
+    billable:
+      (preview?.rows || []).some((r: any) => (r.billingType === 'fixed' ? !r.alreadyBilled : (includeCarryOver ? r.hoursInPeriod + r.hoursCarried : r.hoursInPeriod) > 0)) ||
+      (preview?.milestones || []).some((m: any) => includeCarryOver || !m.carried),
+  }
+}
+
+function UnbilledTab() {
+  const qc = useQueryClient()
+  const [client, setClient] = useState('')
+  const [selected, setSelected] = useState<string[]>([])
+  const [periodStart, setPeriodStart] = useState(monthStartISO())
+  const [periodEnd, setPeriodEnd] = useState(monthEndISO())
+  const [notes, setNotes] = useState('')
+  const [includeCarryOver, setIncludeCarryOver] = useState(false)
+  const [result, setResult] = useState<any | null>(null)
+
+  const { data: projects } = useQuery({
+    queryKey: ['projects-min-client'],
+    queryFn: () => rest.list('projects', { sort: 'name:asc', populate: { client: true }, pagination: { pageSize: 100 } }),
+  })
+  // Clientes con proyectos; los proyectos sin cliente van en un grupo aparte.
+  const clients = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; projects: any[] }>()
+    for (const p of projects || []) {
+      const id = p.client?.documentId || '__none'
+      if (!map.has(id)) map.set(id, { id, name: p.client?.name || 'Sin cliente', projects: [] })
+      map.get(id)!.projects.push(p)
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [projects])
+  const clientProjects = clients.find((c) => c.id === client)?.projects || []
+
+  const previews = useQueries({
+    queries: selected.map((id) => ({
+      queryKey: ['unbilled', id, periodStart, periodEnd],
+      queryFn: () => api(`/billing/unbilled?project=${id}&periodStart=${periodStart}&periodEnd=${periodEnd}`),
+    })),
+  })
+  const loading = previews.some((q) => q.isFetching && !q.data)
+  const firstError = previews.find((q) => q.error)?.error
+  const loaded = previews.map((q, i) => ({ id: selected[i], data: q.data })).filter((x) => x.data)
+
+  const generateMutation = useMutation({
+    mutationFn: () =>
+      api('/billing/generate', {
+        method: 'POST',
+        body: { projects: selected, periodStart, periodEnd, notes: notes || undefined, includeCarryOver },
+      }),
+    onSuccess: (res) => {
+      setResult(res)
+      setNotes('')
+      qc.invalidateQueries({ queryKey: ['unbilled'] })
+      qc.invalidateQueries({ queryKey: ['invoices'] })
+      qc.invalidateQueries({ queryKey: ['reports'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+      qc.invalidateQueries({ queryKey: ['project-entries'] })
+    },
+  })
+
+  const sum = loaded.reduce(
+    (acc, x) => {
+      const t = previewTotals(x.data, includeCarryOver)
+      return { clientTotal: acc.clientTotal + t.clientTotal, devTotal: acc.devTotal + t.devTotal, agencyProfit: acc.agencyProfit + t.agencyProfit, billable: acc.billable || t.billable }
+    },
+    { clientTotal: 0, devTotal: 0, agencyProfit: 0, billable: false },
+  )
+
+  const chooseClient = (id: string) => {
+    setClient(id)
+    setResult(null)
+    // Por defecto se facturan todos los proyectos del cliente; se pueden desmarcar.
+    setSelected((clients.find((c) => c.id === id)?.projects || []).map((p: any) => p.documentId))
+  }
+  const toggleProject = (id: string) => {
+    setResult(null)
+    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
+  }
+
+  return (
+    <div>
+      <Card className="mb-4 p-4">
+        <div className="grid gap-3 sm:grid-cols-[1fr_150px_150px]">
+          <Field label="Cliente">
+            <Select value={client} onChange={(e) => chooseClient(e.target.value)}>
+              <option value="">Selecciona un cliente…</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.projects.length} {c.projects.length === 1 ? 'proyecto' : 'proyectos'})
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Inicio del período">
+            <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+          </Field>
+          <Field label="Fin del período">
+            <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+          </Field>
+        </div>
+        {client ? (
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <p className="mb-1.5 text-xs font-medium text-slate-500">Proyectos a incluir en la misma factura</p>
+            <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+              {clientProjects.map((p: any) => (
+                <label key={p.documentId} className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={selected.includes(p.documentId)} onChange={() => toggleProject(p.documentId)} className="size-4 accent-brand-500" />
+                  <span className="inline-block size-2 rounded-full" style={{ background: p.color || '#94a3b8' }} />
+                  {p.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </Card>
+
+      {result ? (
+        <Card className="mb-4 border-emerald-200 bg-emerald-50 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <CheckCircle2 className="text-emerald-600" size={20} />
+            <div className="flex-1 text-sm">
+              <p className="font-semibold text-emerald-800">
+                Se generó la factura {result.invoice.number} y el reporte de pago {result.paymentReport.number}
+              </p>
+              <p className="text-emerald-700">
+                {result.billedEntries} registros de horas marcados como facturados.
+                {result.skipped?.length ? ` ${result.skipped.length} devs sin asignación quedaron fuera.` : ''}
+              </p>
+            </div>
+            <Link to={`/billing/invoices/${result.invoice.documentId}`}>
+              <Button size="sm" variant="secondary" icon={Eye}>
+                Ver factura
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      ) : null}
+
+      {!client ? (
+        <EmptyState
+          icon={Receipt}
+          title="Escoge un cliente"
+          description="Verás las horas sin facturar de cada proyecto y developer, y podrás generar una sola factura con varios proyectos más el reporte de pago."
+        />
+      ) : !selected.length ? (
+        <EmptyState icon={Receipt} title="Marca al menos un proyecto" description="Elige qué proyectos del cliente van en esta factura." />
+      ) : loading ? (
+        <div className="flex h-40 items-center justify-center">
+          <Spinner />
+        </div>
+      ) : firstError ? (
+        <ErrorNote error={firstError} />
+      ) : (
+        <>
+          {loaded.map((x) => (
+            <ProjectPreview
+              key={x.id}
+              preview={x.data}
+              periodStart={periodStart}
+              includeCarryOver={includeCarryOver}
+              setIncludeCarryOver={setIncludeCarryOver}
+              title={loaded.length > 1 ? x.data.project?.name : undefined}
+            />
+          ))}
+
           <Card className="mt-4 p-4">
             <div className="flex flex-wrap items-end gap-3">
               <Field label="Notas para la factura (opcional)" className="min-w-60 flex-1">
                 <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Servicios de desarrollo — agosto" />
               </Field>
-              <Button
-                icon={ArrowRight}
-                onClick={() => generateMutation.mutate()}
-                loading={generateMutation.isPending}
-                disabled={!billableRows.length && !(preview.milestones || []).some((m: any) => includeCarryOver || !m.carried)}
-              >
+              <Button icon={ArrowRight} onClick={() => generateMutation.mutate()} loading={generateMutation.isPending} disabled={!sum.billable}>
                 Generar factura + reporte de pago
               </Button>
             </div>
             <p className="mt-2 text-xs text-slate-400">
-              Crea la factura al cliente ({money(shownTotals.clientTotal)}) y el reporte de pago a devs ({money(shownTotals.devTotal)}), y marca las horas como facturadas. Ganancia de la agencia: {money(shownTotals.agencyProfit)}.
+              {loaded.length > 1 ? `Una sola factura con ${loaded.length} proyectos. ` : ''}
+              Crea la factura al cliente ({money(sum.clientTotal)}) y el reporte de pago a devs ({money(sum.devTotal)}), y marca las horas como facturadas. Ganancia de la agencia: {money(sum.agencyProfit)}. Luego puedes agregar ítems adicionales, impuesto y comisión en la factura.
             </p>
             {generateMutation.error ? <div className="mt-2"><ErrorNote error={generateMutation.error} /></div> : null}
           </Card>
         </>
-      ) : null}
+      )}
     </div>
   )
 }
@@ -405,7 +485,7 @@ function InvoicesTab() {
     queryKey: ['invoices'],
     queryFn: () =>
       rest.list('invoices', {
-        populate: { project: true, client: true },
+        populate: { project: true, projects: true, client: true },
         sort: 'number:desc',
         pagination: { pageSize: 100 },
       }),
@@ -446,7 +526,7 @@ function InvoicesTab() {
           <tr key={inv.documentId} className="hover:bg-slate-50">
             <Td className="font-medium text-slate-900">{inv.number}</Td>
             <Td>
-              <p className="text-slate-800">{inv.project?.name || '—'}</p>
+              <p className="text-slate-800">{(inv.projects || []).length ? inv.projects.map((p: any) => p.name).join(' + ') : inv.project?.name || '—'}</p>
               <p className="text-xs text-slate-400">{inv.client?.name}</p>
             </Td>
             <Td className="whitespace-nowrap text-slate-500">
