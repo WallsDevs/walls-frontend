@@ -3,16 +3,18 @@ import { money } from '../lib/format'
 import { Button, Field, Input, Select } from './ui'
 
 export type ExtraLine = { kind: 'hours' | 'fixed'; description: string; quantity: string; rate: string }
-export type InvoiceExtras = { lines: ExtraLine[]; taxRate: string; feeAmount: string; feeLabel: string }
+export type TaxLine = { label: string; rate: string }
+export type InvoiceExtras = { lines: ExtraLine[]; taxes: TaxLine[]; feeAmount: string; feeLabel: string }
 
 export const emptyExtraLine = (kind: 'hours' | 'fixed' = 'fixed'): ExtraLine => ({ kind, description: '', quantity: '1', rate: '' })
-export const emptyExtras = (): InvoiceExtras => ({ lines: [], taxRate: '0', feeAmount: '0', feeLabel: 'Comisión de envío / cambio' })
+export const emptyExtras = (): InvoiceExtras => ({ lines: [], taxes: [], feeAmount: '0', feeLabel: 'Comisión de envío / cambio' })
+export const emptyTax = (): TaxLine => ({ label: 'IVA', rate: '' })
 export const extraLineAmount = (l: ExtraLine) => (Number(l.quantity) || 0) * (Number(l.rate) || 0)
 
 /** Convierte el estado del editor al formato que guarda el servidor. */
 export const extrasToPayload = (x: InvoiceExtras) => ({
   extraLines: x.lines.filter((l) => l.description.trim() || extraLineAmount(l)).map((l) => ({ kind: l.kind, description: l.description.trim(), quantity: Number(l.quantity) || 1, rate: Number(l.rate) || 0 })),
-  taxRate: Number(x.taxRate) || 0,
+  taxes: x.taxes.filter((t) => Number(t.rate) > 0).map((t) => ({ label: t.label.trim() || 'Impuesto', rate: Number(t.rate) })),
   feeAmount: Number(x.feeAmount) || 0,
   feeLabel: x.feeLabel.trim() || 'Comisión de envío / cambio',
 })
@@ -21,9 +23,10 @@ export const extrasToPayload = (x: InvoiceExtras) => ({
 export function extrasTotals(baseSubtotal: number, x: InvoiceExtras) {
   const extras = x.lines.reduce((s, l) => s + extraLineAmount(l), 0)
   const subtotal = baseSubtotal + extras
-  const taxAmount = subtotal * ((Number(x.taxRate) || 0) / 100)
+  const taxes = x.taxes.map((t) => ({ label: t.label || 'Impuesto', rate: Number(t.rate) || 0, amount: subtotal * ((Number(t.rate) || 0) / 100) }))
+  const taxAmount = taxes.reduce((s, t) => s + t.amount, 0)
   const feeAmount = Number(x.feeAmount) || 0
-  return { extras, subtotal, taxAmount, feeAmount, total: subtotal + taxAmount + feeAmount }
+  return { extras, subtotal, taxes, taxAmount, feeAmount, total: subtotal + taxAmount + feeAmount }
 }
 
 /**
@@ -80,16 +83,36 @@ export default function InvoiceExtrasEditor({
       </div>
 
       <div className="mt-4 grid gap-4 border-t border-slate-100 pt-4 lg:grid-cols-[1fr_260px]">
-        <div className="grid gap-3 sm:grid-cols-[120px_1fr_140px]">
-          <Field label="Impuesto (%)" hint={`= ${money(t.taxAmount, currency)}`}>
-            <Input type="number" min={0} step="0.1" value={value.taxRate} onChange={(e) => onChange({ ...value, taxRate: e.target.value })} />
-          </Field>
-          <Field label="Nombre de la comisión">
-            <Input value={value.feeLabel} onChange={(e) => onChange({ ...value, feeLabel: e.target.value })} placeholder="Comisión de envío / cambio" />
-          </Field>
-          <Field label="Comisión (monto)" hint="Lo que cobra el intermediario">
-            <Input type="number" min={0} step="0.01" value={value.feeAmount} onChange={(e) => onChange({ ...value, feeAmount: e.target.value })} />
-          </Field>
+        <div className="space-y-3">
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-600">Impuestos (% sobre el subtotal)</span>
+              <Button size="sm" variant="secondary" icon={Plus} onClick={() => onChange({ ...value, taxes: [...value.taxes, emptyTax()] })}>
+                Impuesto
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {value.taxes.map((tx, i) => (
+                <div key={i} className="grid items-center gap-2 sm:grid-cols-[1fr_90px_110px_auto]">
+                  <Input value={tx.label} onChange={(e) => onChange({ ...value, taxes: value.taxes.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} placeholder="Nombre (IVA, retención…)" />
+                  <Input type="number" min={0} step="0.1" value={tx.rate} onChange={(e) => onChange({ ...value, taxes: value.taxes.map((x, j) => (j === i ? { ...x, rate: e.target.value } : x)) })} placeholder="%" />
+                  <span className="text-right text-sm font-medium text-slate-700">{money(t.taxes[i]?.amount || 0, currency)}</span>
+                  <button onClick={() => onChange({ ...value, taxes: value.taxes.filter((_, j) => j !== i) })} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Quitar">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+              {!value.taxes.length ? <p className="text-xs text-slate-400">Sin impuestos.</p> : null}
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
+            <Field label="Nombre de la comisión">
+              <Input value={value.feeLabel} onChange={(e) => onChange({ ...value, feeLabel: e.target.value })} placeholder="Comisión de envío / cambio" />
+            </Field>
+            <Field label="Comisión (monto)" hint="Lo que cobra el intermediario">
+              <Input type="number" min={0} step="0.01" value={value.feeAmount} onChange={(e) => onChange({ ...value, feeAmount: e.target.value })} />
+            </Field>
+          </div>
         </div>
         <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm">
           <div className="flex justify-between py-0.5 text-slate-600">
@@ -106,12 +129,16 @@ export default function InvoiceExtrasEditor({
             <span>Subtotal</span>
             <span>{money(t.subtotal, currency)}</span>
           </div>
-          {Number(value.taxRate) > 0 ? (
-            <div className="flex justify-between py-0.5 text-slate-600">
-              <span>Impuesto ({Number(value.taxRate)}%)</span>
-              <span>{money(t.taxAmount, currency)}</span>
-            </div>
-          ) : null}
+          {t.taxes
+            .filter((tx) => tx.rate > 0)
+            .map((tx, i) => (
+              <div key={i} className="flex justify-between py-0.5 text-slate-600">
+                <span>
+                  {tx.label} ({tx.rate}%)
+                </span>
+                <span>{money(tx.amount, currency)}</span>
+              </div>
+            ))}
           {t.feeAmount > 0 ? (
             <div className="flex justify-between py-0.5 text-slate-600">
               <span>{value.feeLabel || 'Comisión'}</span>

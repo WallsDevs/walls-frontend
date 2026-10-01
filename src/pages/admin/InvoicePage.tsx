@@ -29,7 +29,7 @@ export default function InvoicePage() {
     if (!inv) return
     setExtras({
       lines: (inv.extraLines || []).map((l: any) => ({ kind: l.kind === 'hours' ? 'hours' : 'fixed', description: l.description || '', quantity: String(l.quantity ?? 1), rate: String(l.rate ?? l.amount ?? '') })),
-      taxRate: String(inv.taxRate ?? 0),
+      taxes: (inv.taxes && inv.taxes.length ? inv.taxes : Number(inv.taxRate) > 0 ? [{ label: 'Impuesto', rate: inv.taxRate }] : []).map((t: any) => ({ label: t.label || 'Impuesto', rate: String(t.rate ?? 0) })),
       feeAmount: String(inv.feeAmount ?? 0),
       feeLabel: inv.feeLabel || 'Comisión de envío / cambio',
     })
@@ -165,12 +165,14 @@ export default function InvoicePage() {
               <span>Subtotal</span>
               <span>{money(subtotal, currency)}</span>
             </div>
-            {Number(inv.taxRate) > 0 ? (
-              <div className="flex justify-between py-1 text-slate-600">
-                <span>Impuesto ({inv.taxRate}%)</span>
-                <span>{money(inv.taxAmount, currency)}</span>
+            {(inv.taxes && inv.taxes.length ? inv.taxes : Number(inv.taxRate) > 0 ? [{ label: 'Impuesto', rate: inv.taxRate, amount: inv.taxAmount }] : []).map((t: any, i: number) => (
+              <div key={i} className="flex justify-between py-1 text-slate-600">
+                <span>
+                  {t.label} ({t.rate}%)
+                </span>
+                <span>{money(t.amount, currency)}</span>
               </div>
-            ) : null}
+            ))}
             {Number(inv.feeAmount) > 0 ? (
               <div className="flex justify-between py-1 text-slate-600">
                 <span>{inv.feeLabel || 'Comisión de envío / cambio'}</span>
