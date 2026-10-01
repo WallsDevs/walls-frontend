@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowRight, Briefcase, CheckCircle2, Eye, FileText, Rece
 import { api, rest } from '../../lib/api'
 import { fmtDate, hours, money, monthEndISO, monthLabel, monthStartISO, todayISO } from '../../lib/format'
 import { BILLING_TYPE_LABELS, INVOICE_STATUS_LABELS, PAYMENT_TYPE_LABELS, REPORT_STATUS_LABELS } from '../../lib/labels'
+import InvoiceExtrasEditor, { emptyExtras, extrasToPayload, extrasTotals, type InvoiceExtras } from '../../components/InvoiceExtrasEditor'
 import {
   Badge,
   Button,
@@ -308,6 +309,7 @@ function UnbilledTab() {
   const [periodEnd, setPeriodEnd] = useState(monthEndISO())
   const [notes, setNotes] = useState('')
   const [includeCarryOver, setIncludeCarryOver] = useState(false)
+  const [extras, setExtras] = useState<InvoiceExtras>(emptyExtras())
   const [result, setResult] = useState<any | null>(null)
 
   const { data: projects } = useQuery({
@@ -340,11 +342,12 @@ function UnbilledTab() {
     mutationFn: () =>
       api('/billing/generate', {
         method: 'POST',
-        body: { projects: selected, periodStart, periodEnd, notes: notes || undefined, includeCarryOver },
+        body: { projects: selected, periodStart, periodEnd, notes: notes || undefined, includeCarryOver, ...extrasToPayload(extras) },
       }),
     onSuccess: (res) => {
       setResult(res)
       setNotes('')
+      setExtras(emptyExtras())
       qc.invalidateQueries({ queryKey: ['unbilled'] })
       qc.invalidateQueries({ queryKey: ['invoices'] })
       qc.invalidateQueries({ queryKey: ['reports'] })
@@ -459,17 +462,21 @@ function UnbilledTab() {
           ))}
 
           <Card className="mt-4 p-4">
+            <InvoiceExtrasEditor value={extras} onChange={setExtras} baseSubtotal={sum.clientTotal} />
+          </Card>
+
+          <Card className="mt-4 p-4">
             <div className="flex flex-wrap items-end gap-3">
               <Field label="Notas para la factura (opcional)" className="min-w-60 flex-1">
                 <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Servicios de desarrollo — agosto" />
               </Field>
-              <Button icon={ArrowRight} onClick={() => generateMutation.mutate()} loading={generateMutation.isPending} disabled={!sum.billable}>
+              <Button icon={ArrowRight} onClick={() => generateMutation.mutate()} loading={generateMutation.isPending} disabled={!sum.billable && !extras.lines.some((l) => Number(l.rate) > 0)}>
                 Generar factura + reporte de pago
               </Button>
             </div>
             <p className="mt-2 text-xs text-slate-400">
               {loaded.length > 1 ? `Una sola factura con ${loaded.length} proyectos. ` : ''}
-              Crea la factura al cliente ({money(sum.clientTotal)}) y el reporte de pago a devs ({money(sum.devTotal)}), y marca las horas como facturadas. Ganancia de la agencia: {money(sum.agencyProfit)}. Luego puedes agregar ítems adicionales, impuesto y comisión en la factura.
+              Factura al cliente por {money(extrasTotals(sum.clientTotal, extras).total)} (líneas del proyecto {money(sum.clientTotal)} más ítems, impuesto y comisión) y reporte de pago a devs por {money(sum.devTotal)}; marca las horas como facturadas. Ganancia de la agencia sobre las horas: {money(sum.agencyProfit)}.
             </p>
             {generateMutation.error ? <div className="mt-2"><ErrorNote error={generateMutation.error} /></div> : null}
           </Card>
