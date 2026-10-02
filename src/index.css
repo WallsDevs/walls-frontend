@@ -104,12 +104,26 @@ body {
   margin: 0;
 }
 
+/* Bloques que solo existen en la versión impresa (p. ej. el documento del presupuesto). */
+.print-only {
+  display: none;
+}
+
 @media print {
   body {
     background: white !important;
   }
   .no-print {
     display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-break-inside-avoid {
+    break-inside: avoid;
+  }
+  .print-break-before {
+    break-before: page;
   }
   .print-area {
     box-shadow: none !important;

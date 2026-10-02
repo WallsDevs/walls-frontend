@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, Briefcase, CheckCircle2, Eye, FileText, Receipt, Wallet } from 'lucide-react'
+import { AlertTriangle, ArrowRight, BarChart3, Briefcase, CheckCircle2, Eye, FileText, Receipt, Wallet } from 'lucide-react'
 import { api, rest } from '../../lib/api'
 import { fmtDate, hours, money, monthEndISO, monthLabel, monthStartISO, todayISO } from '../../lib/format'
 import { BILLING_TYPE_LABELS, INVOICE_STATUS_LABELS, PAYMENT_TYPE_LABELS, REPORT_STATUS_LABELS } from '../../lib/labels'
@@ -599,6 +599,11 @@ function InvoicesTab() {
                     Marcar pagada
                   </Button>
                 )}
+                <Link to={`/billing/invoices/${inv.documentId}/report`} title="Reporte de trabajo para el cliente">
+                  <Button size="sm" variant="ghost" icon={BarChart3}>
+                    Reporte
+                  </Button>
+                </Link>
                 <Link to={`/billing/invoices/${inv.documentId}`}>
                   <Button size="sm" variant="ghost" icon={Eye}>
                     Ver

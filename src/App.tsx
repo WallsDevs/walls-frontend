@@ -10,6 +10,7 @@ import ProjectDetail from './pages/admin/ProjectDetail'
 import Tasks from './pages/admin/Tasks'
 import Billing from './pages/admin/Billing'
 import InvoicePage from './pages/admin/InvoicePage'
+import InvoiceReport from './pages/admin/InvoiceReport'
 import Clients from './pages/admin/Clients'
 import Staff from './pages/admin/Staff'
 import Quotes from './pages/admin/Quotes'
@@ -40,6 +41,7 @@ function AdminRoutes() {
       <Route path="tasks" element={<Tasks />} />
       <Route path="billing" element={<Billing />} />
       <Route path="billing/invoices/:documentId" element={<InvoicePage />} />
+      <Route path="billing/invoices/:documentId/report" element={<InvoiceReport />} />
       <Route path="clients" element={<Clients />} />
       <Route path="staff" element={<Staff />} />
       <Route path="quotes" element={<Quotes />} />

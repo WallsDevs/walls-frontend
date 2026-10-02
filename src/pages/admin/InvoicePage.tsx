@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Pencil, Printer } from 'lucide-react'
+import { ArrowLeft, BarChart3, Pencil, Printer } from 'lucide-react'
 import { rest } from '../../lib/api'
 import { fmtDate, hours, money } from '../../lib/format'
 import { INVOICE_STATUS_LABELS } from '../../lib/labels'
@@ -72,7 +72,12 @@ export default function InvoicePage() {
         <Link to="/billing?tab=invoices" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
           <ArrowLeft size={15} /> Facturas
         </Link>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link to={`/billing/invoices/${documentId}/report`}>
+            <Button variant="secondary" icon={BarChart3}>
+              Reporte de trabajo
+            </Button>
+          </Link>
           {canEdit && !editing ? (
             <Button variant="secondary" icon={Pencil} onClick={() => setEditing(true)}>
               Ítems, impuesto y comisión
