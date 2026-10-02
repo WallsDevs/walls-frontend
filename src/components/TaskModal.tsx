@@ -7,6 +7,7 @@ import { devName, PRIORITY_LABELS, TASK_KIND_LABELS, TASK_STATUS_LABELS, taskAss
 import { Badge, Button, ConfirmDialog, Field, Input, Modal, MultiSelectChips, Select, Textarea, ErrorNote } from './ui'
 import AttachmentsField, { type Attachment } from './AttachmentsField'
 import MeetingLogForm from './MeetingLogForm'
+import { useAccounts } from '../lib/useAccounts'
 
 const emptyForm = {
   title: '',
@@ -60,6 +61,14 @@ export default function TaskModal({
         pagination: { pageSize: 100 },
       }),
     enabled: open && !!effectiveProject,
+  })
+
+  // Developers que además son admins del panel: se pueden asignar aunque no estén en el equipo del proyecto.
+  const { developerAccount } = useAccounts()
+  const { data: allDevs } = useQuery({
+    queryKey: ['developers-min'],
+    queryFn: () => rest.list('developers', { filters: { active: { $eq: true } }, sort: 'firstName:asc', pagination: { pageSize: 100 } }),
+    enabled: open,
   })
 
   const { data: entries } = useQuery({
@@ -177,10 +186,14 @@ export default function TaskModal({
   const teamOptions = (team || [])
     .filter((a: any) => a.developer && a.active !== false)
     .map((a: any) => ({ value: a.developer.documentId, label: devName(a.developer), hint: a.role }))
+  const adminOptions = (allDevs || [])
+    .filter((d: any) => developerAccount(d.documentId)?.role === 'Administrator' && !teamOptions.some((o: any) => o.value === d.documentId))
+    .map((d: any) => ({ value: d.documentId, label: devName(d), hint: 'admin · fuera del equipo' }))
   // Asignados que ya no están en el equipo (o la tarea no tiene proyecto): se muestran por nombre, no por id.
   const chipOptions = [
     ...teamOptions,
-    ...savedAssignees.filter((a) => !teamOptions.some((o: any) => o.value === a.documentId)).map((a) => ({ value: a.documentId, label: a.name, hint: 'fuera del equipo' })),
+    ...adminOptions,
+    ...savedAssignees.filter((a) => ![...teamOptions, ...adminOptions].some((o: any) => o.value === a.documentId)).map((a) => ({ value: a.documentId, label: a.name, hint: 'fuera del equipo' })),
   ]
   const assignedPeople = (form.assignees as string[])
     .map((id) => {
@@ -313,7 +326,7 @@ export default function TaskModal({
               placeholder={effectiveProject ? 'Agregar developer…' : 'Escoge primero el proyecto'}
               emptyText="Sin asignar"
             />
-            <p className="mt-1 text-xs text-slate-400">Solo aparece el equipo con asignación activa en el proyecto.</p>
+            <p className="mt-1 text-xs text-slate-400">Aparece el equipo con asignación activa en el proyecto, más los developers que son admins del panel.</p>
           </div>
 
           <Field label="Imágenes">

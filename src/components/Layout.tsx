@@ -167,7 +167,7 @@ function SidebarContent({ onNavigate, collapsed }: { onNavigate?: () => void; co
 }
 
 // Páginas que aprovechan todo el ancho (tableros con muchas columnas) en vez del máximo de lectura.
-const FULL_WIDTH_PATHS = ['/leads', '/tasks', '/content']
+const FULL_WIDTH_PATHS = ['/leads', '/tasks', '/content', '/developers']
 
 export default function Layout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)

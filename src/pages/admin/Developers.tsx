@@ -170,12 +170,10 @@ export default function Developers() {
                       const acc = developerAccount(d.documentId)
                       if (!acc) return <span className="text-xs text-slate-400">Sin cuenta</span>
                       return (
-                        <span
-                          title={acc.email}
-                          className="inline-flex items-center gap-1 text-xs text-emerald-600"
-                        >
+                        <span title={acc.email} className="inline-flex flex-wrap items-center gap-1.5 text-xs text-emerald-600">
                           <KeyRound size={12} />
-                          {acc.role === 'Administrator' ? 'Admin' : 'Developer'}
+                          Developer
+                          {acc.role === 'Administrator' ? <Badge tone="violet">Admin del panel</Badge> : null}
                         </span>
                       )
                     })()}
