@@ -189,7 +189,8 @@ export default function TaskModal({
       return { documentId: id, name: opt?.label || fromTask?.name || id }
     })
   const isMeeting = form.kind === 'reunion'
-  const missingProject = !!task && !task.project
+  // Sin proyecto de verdad: la tarea no lo trae y el modal tampoco lo recibe fijo (desde la página del proyecto siempre se conoce).
+  const missingProject = !!task && !task.project && !projectId
 
   // Horas agrupadas: las de una misma reunión van juntas.
   const entryGroups = (() => {
