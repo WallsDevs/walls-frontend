@@ -31,12 +31,16 @@ function ProjectPreview({
   periodStart,
   includeCarryOver,
   setIncludeCarryOver,
+  selectedMilestones,
+  toggleMilestone,
   title,
 }: {
   preview: any
   periodStart: string
   includeCarryOver: boolean
   setIncludeCarryOver: (v: boolean) => void
+  selectedMilestones: string[]
+  toggleMilestone: (id: string) => void
   title?: string
 }) {
   const carried = preview?.carried
@@ -44,11 +48,8 @@ function ProjectPreview({
   const billableRows = (preview?.rows || []).filter((r: any) =>
     r.billingType === 'fixed' ? !r.alreadyBilled : (includeCarryOver ? r.hoursInPeriod + r.hoursCarried : r.hoursInPeriod) > 0,
   )
-  const shownTotals = {
-    clientTotal: (preview?.totals?.clientTotal || 0) + (includeCarryOver ? carried?.clientTotal || 0 : 0),
-    devTotal: (preview?.totals?.devTotal || 0) + (includeCarryOver ? carried?.devTotal || 0 : 0),
-    agencyProfit: (preview?.totals?.agencyProfit || 0) + (includeCarryOver ? carried?.agencyProfit || 0 : 0),
-  }
+  const shownTotals = previewTotals(preview, includeCarryOver, selectedMilestones)
+  const milestoneIncluded = (m: any) => (m.optional ? selectedMilestones.includes(m.documentId) : includeCarryOver || !m.carried)
   return (
     <div className="mb-6">
       {title ? <h3 className="mb-2 text-sm font-semibold text-slate-900">{title}</h3> : null}
@@ -236,16 +237,19 @@ function ProjectPreview({
           {(preview.milestones || []).length ? (
             <Card className="mt-4 overflow-hidden">
               <div className="border-b border-slate-200 px-5 py-3">
-                <h3 className="text-sm font-semibold text-slate-900">Entregables aprobados y entregados</h3>
-                <p className="text-xs text-slate-500">De presupuestos aprobados. Se facturan una sola vez.</p>
+                <h3 className="text-sm font-semibold text-slate-900">Entregables de presupuestos aprobados</h3>
+                <p className="text-xs text-slate-500">
+                  Los entregados dentro del período se facturan solos. Los pendientes puedes incluirlos marcándolos (por ejemplo, para cobrar un anticipo). Cada uno se factura una sola vez.
+                </p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-max text-left text-sm">
                   <thead>
                     <tr>
+                      <Th>Incluir</Th>
                       <Th>Entregable</Th>
                       <Th>Presupuesto</Th>
-                      <Th>Entregado</Th>
+                      <Th>Estado</Th>
                       <Th>Ejecutó</Th>
                       <Th right>Pago al dev</Th>
                       <Th right>Cobro al cliente</Th>
@@ -254,19 +258,49 @@ function ProjectPreview({
                   </thead>
                   <tbody>
                     {preview.milestones.map((m: any) => {
-                      const skip = m.carried && !includeCarryOver
+                      const included = milestoneIncluded(m)
+                      const skip = !included
                       return (
-                        <tr key={m.documentId} className={skip ? 'opacity-45' : ''}>
+                        <tr key={m.documentId} className={skip ? 'opacity-60' : ''}>
+                          <Td>
+                            <input
+                              type="checkbox"
+                              checked={included}
+                              disabled={!m.optional}
+                              onChange={() => toggleMilestone(m.documentId)}
+                              title={m.optional ? 'Incluir en esta factura' : m.carried ? 'Se incluye con las horas arrastradas' : 'Entregado en el período: se incluye'}
+                              className="size-4 accent-brand-500 disabled:opacity-50"
+                            />
+                          </Td>
                           <Td className="font-medium text-slate-900">
                             {m.title}
                             {m.carried ? (
                               <span className="block text-[10px] font-medium text-amber-700">
                                 entregado antes del período
                               </span>
+                            ) : m.optionalReason === 'after_period' ? (
+                              <span className="block text-[10px] font-medium text-amber-700">
+                                entregado después del período
+                              </span>
+                            ) : m.optional ? (
+                              <span className="block text-[10px] font-medium text-amber-700">
+                                sin entregar{m.dueDate ? ` · estimado ${fmtDate(m.dueDate)}` : ''}
+                              </span>
                             ) : null}
                           </Td>
                           <Td className="text-slate-500">{m.quoteNumber || '—'}</Td>
-                          <Td className="whitespace-nowrap text-slate-500">{fmtDate(m.deliveredAt)}</Td>
+                          <Td className="whitespace-nowrap">
+                            {m.status === 'delivered' ? (
+                              <>
+                                <Badge tone="green">Entregado</Badge>
+                                <span className="block pt-0.5 text-[10px] text-slate-400">{fmtDate(m.deliveredAt)}</span>
+                              </>
+                            ) : m.status === 'in_progress' ? (
+                              <Badge tone="blue">En progreso</Badge>
+                            ) : (
+                              <Badge tone="gray">Pendiente</Badge>
+                            )}
+                          </Td>
                           <Td className="text-slate-600">{m.developer?.name || '—'}</Td>
                           <Td right>{skip ? <span className="text-slate-400">—</span> : money(m.devAmount)}</Td>
                           <Td right className="font-medium">
@@ -288,16 +322,19 @@ function ProjectPreview({
   )
 }
 
-/** Totales facturables de un preview según el check de horas arrastradas. */
-function previewTotals(preview: any, includeCarryOver: boolean) {
+/** Totales facturables de un preview según el check de horas arrastradas y los entregables marcados a mano. */
+function previewTotals(preview: any, includeCarryOver: boolean, selectedMilestones: string[]) {
   const carried = preview?.carried
+  const extraMs = (preview?.milestones || []).filter((m: any) => m.optional && selectedMilestones.includes(m.documentId))
+  const extraClient = extraMs.reduce((s: number, m: any) => s + (m.amount || 0), 0)
+  const extraDev = extraMs.reduce((s: number, m: any) => s + (m.devAmount || 0), 0)
   return {
-    clientTotal: (preview?.totals?.clientTotal || 0) + (includeCarryOver ? carried?.clientTotal || 0 : 0),
-    devTotal: (preview?.totals?.devTotal || 0) + (includeCarryOver ? carried?.devTotal || 0 : 0),
-    agencyProfit: (preview?.totals?.agencyProfit || 0) + (includeCarryOver ? carried?.agencyProfit || 0 : 0),
+    clientTotal: (preview?.totals?.clientTotal || 0) + (includeCarryOver ? carried?.clientTotal || 0 : 0) + extraClient,
+    devTotal: (preview?.totals?.devTotal || 0) + (includeCarryOver ? carried?.devTotal || 0 : 0) + extraDev,
+    agencyProfit: (preview?.totals?.agencyProfit || 0) + (includeCarryOver ? carried?.agencyProfit || 0 : 0) + (extraClient - extraDev),
     billable:
       (preview?.rows || []).some((r: any) => (r.billingType === 'fixed' ? !r.alreadyBilled : (includeCarryOver ? r.hoursInPeriod + r.hoursCarried : r.hoursInPeriod) > 0)) ||
-      (preview?.milestones || []).some((m: any) => includeCarryOver || !m.carried),
+      (preview?.milestones || []).some((m: any) => (m.optional ? selectedMilestones.includes(m.documentId) : includeCarryOver || !m.carried)),
   }
 }
 
@@ -309,6 +346,9 @@ function UnbilledTab() {
   const [periodEnd, setPeriodEnd] = useState(monthEndISO())
   const [notes, setNotes] = useState('')
   const [includeCarryOver, setIncludeCarryOver] = useState(false)
+  // Entregables pendientes (o fuera del período) que se facturan a mano, p. ej. como anticipo.
+  const [selectedMilestones, setSelectedMilestones] = useState<string[]>([])
+  const toggleMilestone = (id: string) => setSelectedMilestones((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
   const [extras, setExtras] = useState<InvoiceExtras>(emptyExtras())
   const [result, setResult] = useState<any | null>(null)
 
@@ -342,11 +382,12 @@ function UnbilledTab() {
     mutationFn: () =>
       api('/billing/generate', {
         method: 'POST',
-        body: { projects: selected, periodStart, periodEnd, notes: notes || undefined, includeCarryOver, ...extrasToPayload(extras) },
+        body: { projects: selected, periodStart, periodEnd, notes: notes || undefined, includeCarryOver, milestones: selectedMilestones, ...extrasToPayload(extras) },
       }),
     onSuccess: (res) => {
       setResult(res)
       setNotes('')
+      setSelectedMilestones([])
       setExtras(emptyExtras())
       qc.invalidateQueries({ queryKey: ['unbilled'] })
       qc.invalidateQueries({ queryKey: ['invoices'] })
@@ -358,7 +399,7 @@ function UnbilledTab() {
 
   const sum = loaded.reduce(
     (acc, x) => {
-      const t = previewTotals(x.data, includeCarryOver)
+      const t = previewTotals(x.data, includeCarryOver, selectedMilestones)
       return { clientTotal: acc.clientTotal + t.clientTotal, devTotal: acc.devTotal + t.devTotal, agencyProfit: acc.agencyProfit + t.agencyProfit, billable: acc.billable || t.billable }
     },
     { clientTotal: 0, devTotal: 0, agencyProfit: 0, billable: false },
@@ -367,6 +408,7 @@ function UnbilledTab() {
   const chooseClient = (id: string) => {
     setClient(id)
     setResult(null)
+    setSelectedMilestones([])
     // Por defecto se facturan todos los proyectos del cliente; se pueden desmarcar.
     setSelected((clients.find((c) => c.id === id)?.projects || []).map((p: any) => p.documentId))
   }
@@ -457,6 +499,8 @@ function UnbilledTab() {
               periodStart={periodStart}
               includeCarryOver={includeCarryOver}
               setIncludeCarryOver={setIncludeCarryOver}
+              selectedMilestones={selectedMilestones}
+              toggleMilestone={toggleMilestone}
               title={loaded.length > 1 ? x.data.project?.name : undefined}
             />
           ))}
