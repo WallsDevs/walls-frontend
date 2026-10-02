@@ -181,6 +181,14 @@ export default function QuoteDetail() {
     },
   })
 
+  const msDeliveredAtMutation = useMutation({
+    mutationFn: ({ id, date }: { id: string; date: string }) => rest.update('milestones', id, { deliveredAt: new Date(`${date}T12:00:00`).toISOString() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['quote', documentId] })
+      qc.invalidateQueries({ queryKey: ['unbilled'] })
+    },
+  })
+
   const msStatusMutation = useMutation({
     mutationFn: ({ id, status, deliveredAt }: { id: string; status: string; deliveredAt?: string }) =>
       rest.update('milestones', id, { status, ...(deliveredAt ? { deliveredAt: new Date(`${deliveredAt}T12:00:00`).toISOString() } : {}) }),
@@ -318,7 +326,16 @@ export default function QuoteDetail() {
                 </Td>
                 <Td className="whitespace-nowrap text-slate-500">
                   {m.status === 'delivered' && m.deliveredAt ? (
-                    <span className="text-emerald-600">Entregado {fmtDate(m.deliveredAt)}</span>
+                    <label className="inline-flex items-center gap-1 text-emerald-600" title={m.billed ? 'Ya facturado: la fecha no se cambia' : 'Fecha de entrega (editable)'}>
+                      Entregado
+                      <input
+                        type="date"
+                        value={String(m.deliveredAt).slice(0, 10)}
+                        disabled={m.billed}
+                        onChange={(e) => e.target.value && msDeliveredAtMutation.mutate({ id: m.documentId, date: e.target.value })}
+                        className="rounded border border-transparent bg-transparent px-1 py-0 text-sm text-emerald-700 hover:border-slate-300 focus:border-brand-500 focus:outline-none disabled:opacity-70"
+                      />
+                    </label>
                   ) : (
                     fmtDate(m.dueDate)
                   )}
