@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CheckCircle2, Pencil, Plus, Printer, Send, Trash2, XCircle } from 'lucide-react'
 import { rest } from '../../lib/api'
-import { fmtDate, money } from '../../lib/format'
+import { fmtDate, money, todayISO } from '../../lib/format'
 import { MILESTONE_STATUS_LABELS, QUOTE_STATUS_LABELS, QUOTE_STATUS_TONES } from '../../lib/labels'
 import {
   Badge,
@@ -149,6 +149,9 @@ export default function QuoteDetail() {
   const [msModal, setMsModal] = useState<{ open: boolean; milestone?: any }>({ open: false })
   const [deletingMs, setDeletingMs] = useState<any | null>(null)
   const [deletingQuote, setDeletingQuote] = useState(false)
+  // Fechas manuales: al aprobar el presupuesto y al marcar un entregable como entregado.
+  const [approveDialog, setApproveDialog] = useState<{ open: boolean; date: string }>({ open: false, date: todayISO() })
+  const [deliverDialog, setDeliverDialog] = useState<{ milestone: any | null; date: string }>({ milestone: null, date: todayISO() })
 
   const { data: quote, isLoading, error } = useQuery({
     queryKey: ['quote', documentId],
@@ -159,10 +162,10 @@ export default function QuoteDetail() {
   })
 
   const statusMutation = useMutation({
-    mutationFn: (status: string) =>
+    mutationFn: ({ status, approvedDate }: { status: string; approvedDate?: string | null }) =>
       rest.update('quotes', documentId, {
         status,
-        approvedDate: status === 'approved' ? new Date().toISOString().slice(0, 10) : null,
+        approvedDate: status === 'approved' ? approvedDate || todayISO() : null,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['quote', documentId] })
@@ -170,8 +173,17 @@ export default function QuoteDetail() {
     },
   })
 
+  const approvedDateMutation = useMutation({
+    mutationFn: (approvedDate: string) => rest.update('quotes', documentId, { approvedDate }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['quote', documentId] })
+      qc.invalidateQueries({ queryKey: ['quotes'] })
+    },
+  })
+
   const msStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => rest.update('milestones', id, { status }),
+    mutationFn: ({ id, status, deliveredAt }: { id: string; status: string; deliveredAt?: string }) =>
+      rest.update('milestones', id, { status, ...(deliveredAt ? { deliveredAt: new Date(`${deliveredAt}T12:00:00`).toISOString() } : {}) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['quote', documentId] })
       qc.invalidateQueries({ queryKey: ['unbilled'] })
@@ -216,25 +228,38 @@ export default function QuoteDetail() {
               <h1 className="text-xl font-semibold tracking-tight text-slate-900">{quote.title}</h1>
               <Badge tone={QUOTE_STATUS_TONES[quote.status]}>{QUOTE_STATUS_LABELS[quote.status]}</Badge>
             </div>
-            <p className="mt-1 text-sm text-slate-500">
-              {quote.number} · {quote.project?.name}
-              {quote.project?.client ? ` · ${quote.project.client.name}` : ''}
-              {quote.approvedDate ? ` · Aprobado el ${fmtDate(quote.approvedDate)}` : ''}
+            <p className="mt-1 flex flex-wrap items-center gap-x-1 text-sm text-slate-500">
+              <span>
+                {quote.number} · {quote.project?.name}
+                {quote.project?.client ? ` · ${quote.project.client.name}` : ''}
+              </span>
+              {quote.status === 'approved' ? (
+                <label className="inline-flex items-center gap-1.5">
+                  · Aprobado el
+                  <input
+                    type="date"
+                    value={quote.approvedDate || ''}
+                    onChange={(e) => e.target.value && approvedDateMutation.mutate(e.target.value)}
+                    className="rounded border border-transparent bg-transparent px-1 py-0 text-sm text-slate-700 hover:border-slate-300 focus:border-brand-500 focus:outline-none"
+                    title="Fecha de aprobación (editable)"
+                  />
+                </label>
+              ) : null}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             {quote.status === 'draft' && (
-              <Button variant="secondary" icon={Send} onClick={() => statusMutation.mutate('sent')} loading={statusMutation.isPending}>
+              <Button variant="secondary" icon={Send} onClick={() => statusMutation.mutate({ status: 'sent' })} loading={statusMutation.isPending}>
                 Marcar enviado
               </Button>
             )}
             {(quote.status === 'sent' || quote.status === 'rejected') && (
-              <Button icon={CheckCircle2} onClick={() => statusMutation.mutate('approved')} loading={statusMutation.isPending}>
+              <Button icon={CheckCircle2} onClick={() => setApproveDialog({ open: true, date: todayISO() })} loading={statusMutation.isPending}>
                 Marcar aprobado
               </Button>
             )}
             {quote.status === 'sent' && (
-              <Button variant="secondary" icon={XCircle} onClick={() => statusMutation.mutate('rejected')}>
+              <Button variant="secondary" icon={XCircle} onClick={() => statusMutation.mutate({ status: 'rejected' })}>
                 Rechazado
               </Button>
             )}
@@ -306,7 +331,11 @@ export default function QuoteDetail() {
                 <Td>
                   <Select
                     value={m.status}
-                    onChange={(e) => msStatusMutation.mutate({ id: m.documentId, status: e.target.value })}
+                    onChange={(e) =>
+                      e.target.value === 'delivered'
+                        ? setDeliverDialog({ milestone: m, date: todayISO() })
+                        : msStatusMutation.mutate({ id: m.documentId, status: e.target.value })
+                    }
                     disabled={m.billed}
                     className="w-36 py-1 text-xs"
                   >
@@ -383,6 +412,56 @@ export default function QuoteDetail() {
         milestone={msModal.milestone}
         position={milestones.length}
       />
+      <Modal
+        open={approveDialog.open}
+        onClose={() => setApproveDialog((d) => ({ ...d, open: false }))}
+        title="Marcar presupuesto como aprobado"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setApproveDialog((d) => ({ ...d, open: false }))}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                statusMutation.mutate({ status: 'approved', approvedDate: approveDialog.date })
+                setApproveDialog((d) => ({ ...d, open: false }))
+              }}
+              disabled={!approveDialog.date}
+            >
+              Aprobar
+            </Button>
+          </>
+        }
+      >
+        <Field label="Fecha de aprobación" hint="La fecha en que el cliente aceptó, no la de hoy necesariamente">
+          <Input type="date" value={approveDialog.date} onChange={(e) => setApproveDialog((d) => ({ ...d, date: e.target.value }))} />
+        </Field>
+      </Modal>
+      <Modal
+        open={!!deliverDialog.milestone}
+        onClose={() => setDeliverDialog({ milestone: null, date: todayISO() })}
+        title={`Marcar entregado · ${deliverDialog.milestone?.title || ''}`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDeliverDialog({ milestone: null, date: todayISO() })}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                msStatusMutation.mutate({ id: deliverDialog.milestone.documentId, status: 'delivered', deliveredAt: deliverDialog.date })
+                setDeliverDialog({ milestone: null, date: todayISO() })
+              }}
+              disabled={!deliverDialog.date}
+            >
+              Marcar entregado
+            </Button>
+          </>
+        }
+      >
+        <Field label="Fecha de entrega" hint="Con esta fecha se decide en qué período se factura">
+          <Input type="date" value={deliverDialog.date} onChange={(e) => setDeliverDialog((d) => ({ ...d, date: e.target.value }))} />
+        </Field>
+      </Modal>
       <ConfirmDialog
         open={!!deletingMs}
         onClose={() => setDeletingMs(null)}
